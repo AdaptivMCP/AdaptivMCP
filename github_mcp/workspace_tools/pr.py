@@ -119,5 +119,5 @@ async def commit_and_open_pr_from_workspace(
             if isinstance(pr_result, dict)
             else None,
         }
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - tool boundary translates dependency errors
         return _structured_tool_error(exc, context="commit_and_open_pr_from_workspace")

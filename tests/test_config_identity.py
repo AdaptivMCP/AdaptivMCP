@@ -4,7 +4,7 @@ import importlib
 
 
 def _reload_config(monkeypatch, env: dict[str, str | None]):
-    import github_mcp.config as config
+    from github_mcp import config
 
     for key, value in env.items():
         if value is None:

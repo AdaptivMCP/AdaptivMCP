@@ -51,7 +51,7 @@ def _schedule_close(
     try:
         if getattr(client, "is_closed", False):
             return
-    except Exception:  # nosec B110
+    except Exception:  # nosec B110  # noqa: BLE001, S110 - optional cleanup or compatibility fallback
         # If we cannot interrogate the client state, attempt to close anyway.
         pass
 
@@ -74,11 +74,11 @@ def _schedule_close(
             task = asyncio.create_task(coro)
             del task
             return True
-        except Exception:
+        except Exception:  # noqa: BLE001 - handle optional metadata or report a boundary failure
             try:
                 if coro is not None and hasattr(coro, "close"):
                     coro.close()
-            except Exception:  # nosec B110
+            except Exception:  # nosec B110  # noqa: BLE001, S110 - optional cleanup or compatibility fallback
                 pass
             return False
 
@@ -100,7 +100,7 @@ def _schedule_close(
                     lambda: asyncio.create_task(client.aclose())
                 )
                 return True
-            except Exception:
+            except Exception:  # noqa: BLE001 - handle optional metadata or report a boundary failure
                 _log("Failed to schedule client close via call_soon_threadsafe")
                 return False
 
@@ -109,7 +109,7 @@ def _schedule_close(
             try:
                 client_loop.run_until_complete(client.aclose())
                 return True
-            except Exception:
+            except Exception:  # noqa: BLE001 - handle optional metadata or report a boundary failure
                 _log("Failed to close async client by running its loop")
                 return False
 
@@ -138,7 +138,7 @@ def _schedule_close(
         if running_loop is None:
             try:
                 asyncio.run(client.aclose())
-            except Exception:
+            except Exception:  # noqa: BLE001 - handle optional metadata or report a boundary failure
                 _log("Failed to close async client in fallback asyncio.run")
         else:
             _log(
@@ -146,7 +146,7 @@ def _schedule_close(
             )
 
 
-def refresh_async_client(  # noqa: PLR0913
+def refresh_async_client(
     client: Any | None,
     *,
     client_loop: asyncio.AbstractEventLoop | None,
@@ -171,7 +171,7 @@ def refresh_async_client(  # noqa: PLR0913
     if not needs_refresh:
         try:
             needs_refresh = bool(getattr(client, "is_closed", False))
-        except Exception:
+        except Exception:  # noqa: BLE001 - handle optional metadata or report a boundary failure
             needs_refresh = True
 
     if not needs_refresh and client_loop is not None and client_loop is not loop:
@@ -188,7 +188,7 @@ def refresh_async_client(  # noqa: PLR0913
             log_debug=log_debug,
             log_debug_exc=log_debug_exc,
         )
-    except Exception:
+    except Exception:  # noqa: BLE001 - handle optional metadata or report a boundary failure
         if log_debug_exc is not None:
             log_debug_exc("Failed to refresh async client")
         elif log_debug is not None:

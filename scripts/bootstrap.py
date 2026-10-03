@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """Project bootstrap helper.
 
 This script creates (or repairs) a local virtual environment so contributors
@@ -13,7 +14,6 @@ any requirements. Use `--deps` to install requirements on demand.
 from __future__ import annotations
 
 import argparse
-import hashlib
 import os
 import shutil
 import subprocess
@@ -32,7 +32,7 @@ def _venv_python(venv_dir: Path) -> Path:
 
 
 def _run(cmd: list[str], *, cwd: Path) -> None:
-    proc = subprocess.run(cmd, cwd=str(cwd))
+    proc = subprocess.run(cmd, cwd=str(cwd), check=False)
     if proc.returncode != 0:
         raise SystemExit(proc.returncode)
 
@@ -47,7 +47,7 @@ def _pip_ok(python_exe: Path, *, cwd: Path) -> bool:
             check=False,
         )
         return proc.returncode == 0
-    except Exception:
+    except Exception:  # noqa: BLE001 - handle optional metadata or report a boundary failure
         return False
 
 
@@ -119,8 +119,12 @@ def _create_or_repair_venv(
 
 
 def _requirements_hash(requirements_path: Path) -> str:
-    content = requirements_path.read_bytes()
-    return hashlib.sha256(content).hexdigest()
+    # Running this file directly puts scripts/, rather than the repo, on sys.path.
+    if str(_repo_root()) not in sys.path:
+        sys.path.insert(0, str(_repo_root()))
+    from github_mcp.requirements_utils import requirements_hash
+
+    return requirements_hash(requirements_path)
 
 
 def _requirements_marker(venv_dir: Path, requirements_path: Path) -> Path:

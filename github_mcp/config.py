@@ -157,17 +157,17 @@ def _sanitize_for_logs(value: object, *, depth: int = 0, max_depth: int = 3) -> 
                 if "\x00" in decoded or "\ufffd" in decoded:
                     return f"<bytes len={len(bb)}>"
                 return _clip_str(decoded)
-            except Exception:
+            except Exception:  # noqa: BLE001 - handle optional metadata or report a boundary failure
                 try:
                     ln = len(v)  # type: ignore[arg-type]
-                except Exception:
+                except Exception:  # noqa: BLE001 - handle optional metadata or report a boundary failure
                     ln = 0
                 return f"<bytes len={ln}>" if ln else "<bytes>"
 
         if d >= max(0, max_depth_cfg):
             try:
                 return _clip_str(str(v))
-            except Exception:
+            except Exception:  # noqa: BLE001 - handle optional metadata or report a boundary failure
                 return "…"
 
         if isinstance(v, Mapping):
@@ -186,12 +186,12 @@ def _sanitize_for_logs(value: object, *, depth: int = 0, max_depth: int = 3) -> 
 
         try:
             return _clip_str(str(v))
-        except Exception:
+        except Exception:  # noqa: BLE001 - handle optional metadata or report a boundary failure
             return "…"
 
     try:
         jsonable = redact_any(_jsonable(value))
-    except Exception:
+    except Exception:  # noqa: BLE001 - handle optional metadata or report a boundary failure
         jsonable = value
     return walk(jsonable, depth)
 
@@ -211,7 +211,7 @@ def summarize_request_context(req: Mapping[str, Any] | None) -> dict[str, Any]:
 
     try:
         return _jsonable(dict(req))
-    except Exception:
+    except Exception:  # noqa: BLE001 - handle optional metadata or report a boundary failure
         return {}
 
 
@@ -256,7 +256,7 @@ def snapshot_request_context(req: Mapping[str, Any] | None) -> dict[str, Any]:
 
     try:
         return _jsonable(out)
-    except Exception:
+    except Exception:  # noqa: BLE001 - handle optional metadata or report a boundary failure
         return out
 
 
@@ -353,7 +353,7 @@ def _resolve_log_level(level_name: str | None) -> int:
     if name.lstrip("-").isdigit():
         try:
             return int(name)
-        except Exception:
+        except Exception:  # noqa: BLE001 - handle optional metadata or report a boundary failure
             return logging.INFO
 
     return getattr(logging, name, logging.INFO)
@@ -417,14 +417,14 @@ else:
     try:
         _v = float(str(_raw_httpx_timeout).strip())
         HTTPX_TIMEOUT = None if _v <= 0 else _v
-    except Exception:
+    except Exception:  # noqa: BLE001 - handle optional metadata or report a boundary failure
         HTTPX_TIMEOUT = None
 
 GITHUB_REQUEST_TIMEOUT_SECONDS = HTTPX_TIMEOUT
-HTTPX_MAX_CONNECTIONS = int(os.environ.get("HTTPX_MAX_CONNECTIONS", 300))
-HTTPX_MAX_KEEPALIVE = int(os.environ.get("HTTPX_MAX_KEEPALIVE", 200))
+HTTPX_MAX_CONNECTIONS = int(os.environ.get("HTTPX_MAX_CONNECTIONS", "300"))
+HTTPX_MAX_KEEPALIVE = int(os.environ.get("HTTPX_MAX_KEEPALIVE", "200"))
 
-MAX_CONCURRENCY = int(os.environ.get("MAX_CONCURRENCY", 200))
+MAX_CONCURRENCY = int(os.environ.get("MAX_CONCURRENCY", "200"))
 FETCH_FILES_CONCURRENCY = int(os.environ.get("FETCH_FILES_CONCURRENCY", "200"))
 # File cache eviction caps. Set to 0 (or negative) to disable eviction.
 FILE_CACHE_MAX_ENTRIES = int(os.environ.get("FILE_CACHE_MAX_ENTRIES", "0"))
@@ -790,10 +790,12 @@ def git_identity_warnings() -> list[str]:
     if not GIT_IDENTITY_PLACEHOLDER_ACTIVE:
         return []
     return [
-        "Git identity is using placeholder values. Configure ADAPTIV_MCP_GIT_AUTHOR_NAME, "
-        "ADAPTIV_MCP_GIT_AUTHOR_EMAIL, ADAPTIV_MCP_GIT_COMMITTER_NAME, and "
-        "ADAPTIV_MCP_GIT_COMMITTER_EMAIL (or set GitHub App metadata) to ensure commits "
-        "are attributed correctly."
+        (
+            "Git identity is using placeholder values. Configure ADAPTIV_MCP_GIT_AUTHOR_NAME, "
+            "ADAPTIV_MCP_GIT_AUTHOR_EMAIL, ADAPTIV_MCP_GIT_COMMITTER_NAME, and "
+            "ADAPTIV_MCP_GIT_COMMITTER_EMAIL (or set GitHub App metadata) to ensure commits "
+            "are attributed correctly."
+        )
     ]
 
 
@@ -853,8 +855,7 @@ class _StructuredFormatter(logging.Formatter):
 
                 # Shorten and lightly colorize logger names.
                 name = original_name
-                if name.startswith("github_mcp."):
-                    name = name[len("github_mcp.") :]
+                name = name.removeprefix("github_mcp.")
                 if name in {"mcp", "mcp_server.decorators", "mcp_server"}:
                     name = "mcp"
                 elif name.startswith("tools_workspace"):
@@ -865,8 +866,7 @@ class _StructuredFormatter(logging.Formatter):
             else:
                 # Even without ANSI, shorten the logger name for readability.
                 name = original_name
-                if name.startswith("github_mcp."):
-                    name = name[len("github_mcp.") :]
+                name = name.removeprefix("github_mcp.")
                 if name in {"mcp", "mcp_server.decorators", "mcp_server"}:
                     name = "mcp"
                 elif name.startswith("tools_workspace"):
@@ -971,7 +971,7 @@ def _format_extras_block(payload: Mapping[str, Any]) -> str:
         "error",
     )
     ordered_keys = [k for k in preferred if k in cleaned]
-    ordered_keys.extend(sorted(k for k in cleaned.keys() if k not in ordered_keys))
+    ordered_keys.extend(sorted(k for k in cleaned if k not in ordered_keys))
 
     def render_value(value: Any) -> str:
         if value is None:
@@ -986,7 +986,7 @@ def _format_extras_block(payload: Mapping[str, Any]) -> str:
             return json.dumps(
                 value, ensure_ascii=False, separators=(",", ":"), sort_keys=True
             )
-        except Exception:
+        except Exception:  # noqa: BLE001 - handle optional metadata or report a boundary failure
             return json.dumps(str(value), ensure_ascii=False)
 
     parts: list[str] = []
@@ -1007,7 +1007,7 @@ _STANDARD_LOG_FIELDS = set(
 
 
 class _InfoOnlyFilter(logging.Filter):
-    def filter(self, record: logging.LogRecord) -> bool:  # noqa: A003 - matches logging.Filter
+    def filter(self, record: logging.LogRecord) -> bool:
         return record.levelno == logging.INFO
 
 
@@ -1018,17 +1018,17 @@ class _MinLevelFilter(logging.Filter):
         super().__init__()
         self._min_level = int(min_level)
 
-    def filter(self, record: logging.LogRecord) -> bool:  # noqa: A003 - matches logging.Filter
+    def filter(self, record: logging.LogRecord) -> bool:
         return record.levelno >= self._min_level
 
 
 class _UvicornHealthzFilter(logging.Filter):
     """Suppress noisy health check access logs from uvicorn."""
 
-    def filter(self, record: logging.LogRecord) -> bool:  # noqa: A003 - matches logging.Filter
+    def filter(self, record: logging.LogRecord) -> bool:
         try:
             message = record.getMessage()
-        except Exception:
+        except Exception:  # noqa: BLE001 - handle optional metadata or report a boundary failure
             return True
         return "/healthz" not in message
 
@@ -1152,34 +1152,34 @@ RENDER_RATE_LIMIT_RETRY_BASE_DELAY_SECONDS = float(
 )
 
 __all__ = [
+    "ADAPTIV_MCP_GIT_IDENTITY_ENV_VARS",
     "BASE_LOGGER",
     "ERRORS_LOGGER",
     "FETCH_FILES_CONCURRENCY",
     "FILE_CACHE_MAX_BYTES",
     "FILE_CACHE_MAX_ENTRIES",
+    "GITHUB_API_BASE",
+    "GITHUB_LOGGER",
+    "GITHUB_PAT",
+    "GITHUB_TOKEN_ENV_VARS",
     "GIT_AUTHOR_EMAIL",
     "GIT_AUTHOR_NAME",
     "GIT_COMMITTER_EMAIL",
     "GIT_COMMITTER_NAME",
     "GIT_IDENTITY_PLACEHOLDER_ACTIVE",
     "GIT_IDENTITY_SOURCES",
-    "GITHUB_API_BASE",
-    "ADAPTIV_MCP_GIT_IDENTITY_ENV_VARS",
-    "GITHUB_TOKEN_ENV_VARS",
-    "GITHUB_LOGGER",
-    "GITHUB_PAT",
     "HTTPX_MAX_CONNECTIONS",
     "HTTPX_MAX_KEEPALIVE",
     "HTTPX_TIMEOUT",
     "LOG_APPEND_EXTRAS",
-    "LOG_EXTRAS_MAX_LINES",
     "LOG_EXTRAS_MAX_CHARS",
+    "LOG_EXTRAS_MAX_LINES",
+    "LOG_HTTP_REQUESTS",
+    "LOG_INLINE_CONTEXT",
     "LOG_RENDER_HTTP",
     "LOG_RENDER_HTTP_BODIES",
     "LOG_TOOL_CALLS",
     "LOG_TOOL_CALL_STARTS",
-    "LOG_HTTP_REQUESTS",
-    "LOG_INLINE_CONTEXT",
     "MAX_CONCURRENCY",
     "RENDER_API_BASE",
     "RENDER_RATE_LIMIT_RETRY_BASE_DELAY_SECONDS",
@@ -1189,8 +1189,8 @@ __all__ = [
     "SERVER_GIT_COMMIT",
     "SERVER_START_TIME",
     "WORKSPACE_BASE_DIR",
-    "git_identity_warnings",
     "format_log_context",
+    "git_identity_warnings",
     "shorten_token",
     "snapshot_request_context",
     "summarize_request_context",

@@ -11,7 +11,14 @@ def _run_in_loop(loop: asyncio.AbstractEventLoop, fn):
 
 
 def test_async_clients_refresh_when_event_loop_changes(monkeypatch):
-    for name in ("ALL_PROXY", "HTTPS_PROXY", "HTTP_PROXY", "all_proxy", "https_proxy", "http_proxy"):
+    for name in (
+        "ALL_PROXY",
+        "HTTPS_PROXY",
+        "HTTP_PROXY",
+        "all_proxy",
+        "https_proxy",
+        "http_proxy",
+    ):
         monkeypatch.delenv(name, raising=False)
     # Start with a clean slate for global client state.
     http_clients._http_client_github = None

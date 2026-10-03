@@ -3,6 +3,7 @@ from __future__ import annotations
 import sys
 import types
 from collections.abc import AsyncIterator
+from typing import ClassVar
 
 import pytest
 
@@ -141,7 +142,10 @@ async def test_graphql_query_missing_json_returns_structured_error(monkeypatch):
 async def test_fetch_url_filters_headers_and_sets_content_type(monkeypatch):
     class DummyResp:
         status_code = 200
-        headers = {"Content-Type": "text/plain", "X-Ignore": "nope"}
+        headers: ClassVar[dict[str, str]] = {
+            "Content-Type": "text/plain",
+            "X-Ignore": "nope",
+        }
 
         async def aiter_bytes(self) -> AsyncIterator[bytes]:
             yield b"hello"

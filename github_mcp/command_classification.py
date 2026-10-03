@@ -133,6 +133,7 @@ def _has_unquoted_shell_control_syntax(cmd: str) -> bool:
         i += 1
     return False
 
+
 def _has_unquoted_output_redirection(cmd: str) -> bool:
     """Return True if cmd contains an unquoted output redirection operator.
 
@@ -257,9 +258,15 @@ def _infer_write_action_from_parts(parts: list[str]) -> bool:
         # pip is nuanced: some subcommands are read-only.
         if module == "pip":
             sub = parts[3] if len(parts) >= 4 else ""
-            if sub in {"check", "--version", "-V", "list", "freeze", "show", "help"}:
-                return False
-            return True
+            return sub not in {
+                "check",
+                "--version",
+                "-V",
+                "list",
+                "freeze",
+                "show",
+                "help",
+            }
         # Delegate classification for other common modules.
         return _infer_write_action_from_parts([module, *parts[3:]])
 
@@ -267,19 +274,19 @@ def _infer_write_action_from_parts(parts: list[str]) -> bool:
     if prog == "ruff":
         sub = parts[1] if len(parts) > 1 else ""
         if sub == "format":
-            return not any(flag in parts for flag in {"--check", "--diff"})
+            return not any(flag in parts for flag in ("--check", "--diff"))
         if sub == "check":
-            return any(flag in parts for flag in {"--fix", "--unsafe-fixes"})
+            return any(flag in parts for flag in ("--fix", "--unsafe-fixes"))
         # Default ruff command is check-like.
-        return any(flag in parts for flag in {"--fix", "--unsafe-fixes"})
+        return any(flag in parts for flag in ("--fix", "--unsafe-fixes"))
 
     # Black: writes unless explicitly checking.
     if prog == "black":
-        return not any(flag in parts for flag in {"--check", "--diff"})
+        return not any(flag in parts for flag in ("--check", "--diff"))
 
     # isort: writes unless explicitly checking.
     if prog == "isort":
-        return not any(flag in parts for flag in {"--check", "--check-only", "--diff"})
+        return not any(flag in parts for flag in ("--check", "--check-only", "--diff"))
 
     # ESLint: writes only with --fix.
     if prog == "eslint":
@@ -312,7 +319,17 @@ def _infer_write_action_from_parts(parts: list[str]) -> bool:
             # Branch deletion/move/copy mutate refs.
             if sub == "branch" and any(
                 x in parts
-                for x in {"-d", "-D", "--delete", "-m", "-M", "-c", "-C", "--move", "--copy"}
+                for x in (
+                    "-d",
+                    "-D",
+                    "--delete",
+                    "-m",
+                    "-M",
+                    "-c",
+                    "-C",
+                    "--move",
+                    "--copy",
+                )
             ):
                 return True
             # `git config <key>` reads; `git config <key> <value>` writes.
@@ -333,12 +350,8 @@ def _infer_write_action_from_parts(parts: list[str]) -> bool:
         # Unknown git subcommand -> conservative.
         return True
 
-    # Common read-only utilities.
-    if prog in _READ_ONLY_BINARIES:
-        return False
-
-    # Default: unknown commands are treated as write actions.
-    return True
+    # Unknown commands require write authorization.
+    return prog not in _READ_ONLY_BINARIES
 
 
 def _first_non_empty(lines: Iterable[str]) -> str:
@@ -385,7 +398,7 @@ def infer_write_action_from_shell(
     # Tokenize for best-effort classification.
     try:
         parts = shlex.split(cmd)
-    except Exception:
+    except Exception:  # noqa: BLE001 - handle optional metadata or report a boundary failure
         return True
 
     if not parts:

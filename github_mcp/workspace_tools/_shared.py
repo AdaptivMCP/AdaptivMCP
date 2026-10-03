@@ -1,5 +1,4 @@
 # Split from github_mcp.tools_workspace (generated).
-import hashlib
 import inspect
 import os
 import shlex
@@ -7,15 +6,15 @@ from typing import Any
 
 from github_mcp import config
 from github_mcp.exceptions import GitHubAPIError, UsageError
+from github_mcp.requirements_utils import requirements_hash
 from github_mcp.server import CONTROLLER_REPO
 from github_mcp.utils import _get_main_module, _normalize_timeout_seconds
 from github_mcp.workspace import (
     _apply_patch_to_repo,
     _clone_repo,
-    _git_auth_env,
     _prepare_temp_virtualenv,
-    _run_shell,
     _run_git_authenticated,
+    _run_shell,
     _stop_workspace_virtualenv,
     _workspace_virtualenv_status,
 )
@@ -204,9 +203,7 @@ async def _run_shell_ok(
 
 
 def _requirements_hash(requirements_path: str) -> str:
-    with open(requirements_path, "rb") as handle:
-        payload = handle.read()
-    return hashlib.sha256(payload).hexdigest()
+    return requirements_hash(requirements_path)
 
 
 def _requirements_marker_path(venv_dir: str, requirements_path: str) -> str:
@@ -420,9 +417,7 @@ def _workspace_deps() -> dict[str, Any]:
     main_module = _get_main_module()
     clone_repo_fn = getattr(main_module, "_clone_repo", _clone_repo)
     base_run_shell = getattr(main_module, "_run_shell", _run_shell)
-    run_git_fn = getattr(
-        main_module, "_run_git_authenticated", _run_git_authenticated
-    )
+    run_git_fn = getattr(main_module, "_run_git_authenticated", _run_git_authenticated)
     prepare_venv_fn = getattr(
         main_module, "_prepare_temp_virtualenv", _prepare_temp_virtualenv
     )
@@ -440,20 +435,21 @@ def _workspace_deps() -> dict[str, Any]:
         timeout_seconds: int = 0,
         env: dict[str, str] | None = None,
     ) -> dict[str, Any]:
-        if _cmd_invokes_git(cmd):
-            # Local, single git commands may run without credentials. Any
-            # command that composes git with shell syntax is denied. Remote
-            # operations that need credentials use run_git explicitly.
-            if any(sep in cmd for sep in ("\n", "&&", "||", ";", "|")):
-                return {
-                    "exit_code": 126,
-                    "timed_out": False,
-                    "stdout": "",
-                    "stderr": (
-                        "Git commands may not be composed with shell syntax; "
-                        "use the isolated Git service."
-                    ),
-                }
+        # Local, single git commands may run without credentials. Any
+        # command that composes git with shell syntax is denied. Remote
+        # operations that need credentials use run_git explicitly.
+        if (_cmd_invokes_git(cmd)) and (
+            any(sep in cmd for sep in ("\n", "&&", "||", ";", "|"))
+        ):
+            return {
+                "exit_code": 126,
+                "timed_out": False,
+                "stdout": "",
+                "stderr": (
+                    "Git commands may not be composed with shell syntax; "
+                    "use the isolated Git service."
+                ),
+            }
         timeout_seconds = _normalize_timeout_seconds(
             timeout_seconds,
             config.ADAPTIV_MCP_DEFAULT_TIMEOUT_SECONDS,
@@ -485,9 +481,7 @@ def _workspace_deps() -> dict[str, Any]:
                 return await run_git_fn(
                     cmd, cwd=cwd, timeout_seconds=timeout_seconds, env=env
                 )
-        return await run_git_fn(
-            cmd, cwd=cwd, timeout_seconds=timeout_seconds, env=env
-        )
+        return await run_git_fn(cmd, cwd=cwd, timeout_seconds=timeout_seconds, env=env)
 
     async def prepare_venv_leased(repo_dir: str) -> dict[str, str]:
         async with workspace_lease(

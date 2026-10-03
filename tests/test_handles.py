@@ -1,13 +1,13 @@
 from __future__ import annotations
 
+import pytest
+
 from github_mcp.main_tools.handles import (
     ParsedHandle,
     _extract_trailing_int,
     coerce_issue_or_pr_number,
     parse_handle,
 )
-
-import pytest
 
 
 def test_extract_trailing_int_basic() -> None:

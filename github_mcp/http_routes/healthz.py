@@ -49,7 +49,7 @@ def _github_token_present() -> bool:
         return bool(_get_github_token())
     except GitHubAuthError:
         return False
-    except Exception:
+    except Exception:  # noqa: BLE001 - handle optional metadata or report a boundary failure
         # Be conservative: treat unexpected failures as missing tokens so that
         # the health endpoint signals degraded state instead of crashing.
         return False

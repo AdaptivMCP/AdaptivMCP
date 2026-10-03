@@ -15,7 +15,7 @@ def _touch(path: str) -> None:
 
 @pytest.mark.anyio
 async def test_prepare_virtualenv_creates_marker_and_is_reused(monkeypatch, tmp_path):
-    import github_mcp.workspace as workspace
+    from github_mcp import workspace
 
     repo_dir = tmp_path / "repo"
     repo_dir.mkdir()
@@ -66,7 +66,7 @@ async def test_prepare_virtualenv_creates_marker_and_is_reused(monkeypatch, tmp_
 
 @pytest.mark.anyio
 async def test_stop_virtualenv_removes_directory(monkeypatch, tmp_path):
-    import github_mcp.workspace as workspace
+    from github_mcp import workspace
 
     repo_dir = tmp_path / "repo"
     repo_dir.mkdir()

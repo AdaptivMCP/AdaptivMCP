@@ -7,7 +7,7 @@ from typing import Any
 import pytest
 
 import github_mcp.workspace_tools.clone as clone_mod
-import github_mcp.workspace_tools.stream_utils as stream_utils
+from github_mcp.workspace_tools import stream_utils
 
 
 def test_normalize_stream_text_crlf_and_cr() -> None:

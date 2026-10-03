@@ -1,4 +1,4 @@
-import github_mcp.retry_utils as retry_utils
+from github_mcp import retry_utils
 
 
 def test_jitter_sleep_seconds_deterministic_under_pytest(monkeypatch):

@@ -41,7 +41,7 @@ async def get_repo_dashboard(
     try:
         repo_resp = await m.get_repository(full_name)
         repo_info = repo_resp.get("json") or {}
-    except Exception as exc:  # pragma: no cover - defensive
+    except Exception as exc:  # pragma: no cover - defensive  # noqa: BLE001 - handle optional metadata or report a boundary failure
         repo_error = str(exc)
 
     # --- Open pull requests (small window) ---
@@ -55,7 +55,7 @@ async def get_repo_dashboard(
             page=1,
         )
         open_prs = pr_resp.get("json") or []
-    except Exception as exc:  # pragma: no cover - defensive
+    except Exception as exc:  # pragma: no cover - defensive  # noqa: BLE001 - handle optional metadata or report a boundary failure
         pr_error = str(exc)
 
     # --- Open issues (excluding PRs) ---
@@ -73,7 +73,7 @@ async def get_repo_dashboard(
         for item in raw_issues:
             if isinstance(item, dict) and "pull_request" not in item:
                 open_issues.append(item)
-    except Exception as exc:  # pragma: no cover - defensive
+    except Exception as exc:  # pragma: no cover - defensive  # noqa: BLE001 - handle optional metadata or report a boundary failure
         issues_error = str(exc)
 
     # --- Recent workflow runs on this branch ---
@@ -90,7 +90,7 @@ async def get_repo_dashboard(
         workflow_runs = (
             runs_json.get("workflow_runs", []) if isinstance(runs_json, dict) else []
         )
-    except Exception as exc:  # pragma: no cover - defensive
+    except Exception as exc:  # pragma: no cover - defensive  # noqa: BLE001 - handle optional metadata or report a boundary failure
         workflows_error = str(exc)
 
     # --- Top-level tree entries on the branch ---
@@ -124,7 +124,7 @@ async def get_repo_dashboard(
                     "size": entry.get("size"),
                 }
             )
-    except Exception as exc:  # pragma: no cover - defensive
+    except Exception as exc:  # pragma: no cover - defensive  # noqa: BLE001 - handle optional metadata or report a boundary failure
         tree_error = str(exc)
 
     return {

@@ -5,7 +5,7 @@ from types import ModuleType
 
 
 def _iter_mcp_wrapped_callables(module: ModuleType) -> Iterable[Callable]:
-    for _, value in vars(module).items():
+    for value in vars(module).values():
         if callable(value) and getattr(value, "__mcp_tool__", None) is not None:
             yield value
 
@@ -54,7 +54,7 @@ def test_all_mcp_wrapped_tools_are_registered() -> None:
     # Extra tools are optional, but when present they should also be registered.
     try:
         extra = importlib.import_module("extra_tools")
-    except Exception:
+    except Exception:  # noqa: BLE001 - handle optional metadata or report a boundary failure
         extra = None
     if extra is not None:
         expected_names.update({f.__name__ for f in _iter_mcp_wrapped_callables(extra)})

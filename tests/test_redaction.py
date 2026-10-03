@@ -59,7 +59,7 @@ def test_structured_error_redacts_exception_and_details() -> None:
 
 
 def test_config_log_sanitizer_redacts_secrets(monkeypatch) -> None:
-    import github_mcp.config as config
+    from github_mcp import config
 
     monkeypatch.delenv("ADAPTIV_MCP_LOG_FULL_FIDELITY", raising=False)
     secret = "ghp_" + "D" * 32
@@ -83,8 +83,8 @@ def test_redaction_does_not_replace_short_orordinary_values() -> None:
 
 @pytest.mark.anyio
 async def test_mcp_tool_redacts_raw_response_payloads() -> None:
-    from github_mcp.mcp_server.decorators import mcp_tool
     from github_mcp.mcp_server.context import REQUEST_PATH
+    from github_mcp.mcp_server.decorators import mcp_tool
 
     secret = "ghp_" + "E" * 32
 
@@ -104,9 +104,13 @@ async def test_mcp_tool_redacts_raw_response_payloads() -> None:
 
 def test_redaction_preserves_author_and_long_workspace_paths() -> None:
     path = "/tmp/pytest-of-root/pytest-0/test_delete_workspace_paths_re0/outside.txt"
-    assert redact_any({"author": "Alice", "path": path}) == {"author": "Alice", "path": path}
+    assert redact_any({"author": "Alice", "path": path}) == {
+        "author": "Alice",
+        "path": path,
+    }
     assert redact_any({"auth": "secret", "authentication": "secret"}) == {
-        "auth": REDACTED, "authentication": REDACTED,
+        "auth": REDACTED,
+        "authentication": REDACTED,
     }
 
 

@@ -72,11 +72,11 @@ def _parse_marked_steps(stdout: str) -> list[dict[str, Any]]:
             duration_ms: int | None
             try:
                 exit_code = int(code_part.strip())
-            except Exception:
+            except Exception:  # noqa: BLE001 - handle optional metadata or report a boundary failure
                 exit_code = None
             try:
                 duration_ms = int(dur_part.strip()) if dur_part.strip() else None
-            except Exception:
+            except Exception:  # noqa: BLE001 - handle optional metadata or report a boundary failure
                 duration_ms = None
 
             effective_name = current_name or name or "unknown"

@@ -28,16 +28,7 @@ def test_build_unified_diff_contains_headers_and_hunk() -> None:
 
 
 def test_diff_stats_counts_only_content_lines() -> None:
-    diff_text = "\n".join(
-        [
-            "--- a",
-            "+++ b",
-            "@@ -1 +1 @@",
-            "-old",
-            "+new",
-            " unchanged",
-        ]
-    )
+    diff_text = "--- a\n+++ b\n@@ -1 +1 @@\n-old\n+new\n unchanged"
 
     stats = diff_utils.diff_stats(diff_text)
     assert stats.added == 1
@@ -45,16 +36,7 @@ def test_diff_stats_counts_only_content_lines() -> None:
 
 
 def test_colorize_unified_diff_wraps_expected_lines() -> None:
-    diff_text = "\n".join(
-        [
-            "--- a",
-            "+++ b",
-            "@@ -1 +1 @@",
-            "-old",
-            "+new",
-            " unchanged",
-        ]
-    )
+    diff_text = "--- a\n+++ b\n@@ -1 +1 @@\n-old\n+new\n unchanged"
     colored = diff_utils.colorize_unified_diff(diff_text)
 
     assert f"{diff_utils.ANSI_DIM}--- a{diff_utils.ANSI_RESET}" in colored

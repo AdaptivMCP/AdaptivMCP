@@ -39,8 +39,7 @@ def _parse_unified_diff_hunks(
             parts = raw.split()
             if len(parts) >= 4:
                 b_path = parts[3]
-                if b_path.startswith("b/"):
-                    b_path = b_path[2:]
+                b_path = b_path.removeprefix("b/")
                 if b_path not in files and len(files) < max_files:
                     files[b_path] = []
                     cur_path = b_path
@@ -77,16 +76,13 @@ def _excerpt_window(
 ) -> tuple[int, int]:
     """Compute (start_line, max_lines) for an excerpt window around a hunk."""
 
-    if start < 1:
-        start = 1
-    if length < 0:
-        length = 0
+    start = max(start, 1)
+    length = max(length, 0)
     win_start = max(1, start - context)
     win_len = length + (2 * context)
     if win_len < 1:
         win_len = max(1, context * 2)
-    if win_len > max_lines:
-        win_len = max_lines
+    win_len = min(win_len, max_lines)
     return win_start, win_len
 
 
@@ -160,9 +156,7 @@ def _is_error_payload(payload: Any) -> bool:
         return True
     if "error_detail" in payload:
         return True
-    if "error" in payload and status not in {"ok", "partial"}:
-        return True
-    return False
+    return bool("error" in payload and status not in {"ok", "partial"})
 
 
 def _is_missing_remote_ref_error(payload: Any, *, ref: str | None = None) -> bool:
@@ -188,9 +182,10 @@ def _is_missing_remote_ref_error(payload: Any, *, ref: str | None = None) -> boo
         ref_l = ref.lower()
         if f"origin/{ref_l}" in msg:
             return True
-        if ref_l in msg and ("origin/" in msg or "upstream origin" in msg or "origin" in msg):
-            return True
-        return False
+        return bool(
+            ref_l in msg
+            and ("origin/" in msg or "upstream origin" in msg or "origin" in msg)
+        )
 
     return True
 
@@ -519,7 +514,7 @@ async def workspace_apply_ops_and_open_pr(
             "pr_number": pr_res.get("pr_number") if isinstance(pr_res, dict) else None,
             "steps": steps,
         }
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - tool boundary translates dependency errors
         # Always return steps so UIs can render what happened.
         _step(
             steps,
@@ -654,7 +649,7 @@ async def workspace_manage_folders_and_open_pr(
         return await tw.workspace_apply_ops_and_open_pr(
             **_filter_kwargs_for_callable(tw.workspace_apply_ops_and_open_pr, flow_call)
         )
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - tool boundary translates dependency errors
         return _structured_tool_error(
             exc, context="workspace_manage_folders_and_open_pr"
         )
@@ -916,7 +911,7 @@ async def workspace_change_report(
         if include_diff:
             out["diff"] = diff_text
         return out
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - tool boundary translates dependency errors
         _step(
             steps,
             "Error",
@@ -990,7 +985,7 @@ async def workspace_read_files_in_sections(
                         files.append(res)
                 else:
                     files.append(res)
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001 - handle optional metadata or report a boundary failure
                 errors.append({"path": p, "error": str(exc)})
 
         ok = len(errors) == 0
@@ -1008,5 +1003,5 @@ async def workspace_read_files_in_sections(
             "missing_paths": missing,
             "errors": errors,
         }
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - tool boundary translates dependency errors
         return _structured_tool_error(exc, context="workspace_read_files_in_sections")

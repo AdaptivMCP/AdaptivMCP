@@ -6,7 +6,7 @@ import subprocess
 
 import pytest
 
-import github_mcp.workspace_tools.fs as fs
+from github_mcp.workspace_tools import fs
 
 
 def test_read_lines_sections_unicode_decode_error(
@@ -16,7 +16,7 @@ def test_read_lines_sections_unicode_decode_error(
     # Force the except branch by making open() raise UnicodeDecodeError.
     abs_path = str(tmp_path / "file.txt")
 
-    def _boom(*args, **kwargs):  # noqa: ANN001
+    def _boom(*args, **kwargs):
         raise UnicodeDecodeError("utf-8", b"\xff", 0, 1, "boom")
 
     monkeypatch.setattr(builtins, "open", _boom)
@@ -55,7 +55,7 @@ def test_git_show_text_not_found(monkeypatch: pytest.MonkeyPatch, tmp_path) -> N
         stdout = b""
         stderr = b"fatal: path 'nope.txt' does not exist in 'main'"
 
-    def _fake_run(*args, **kwargs):  # noqa: ANN001
+    def _fake_run(*args, **kwargs):
         return _Proc()
 
     monkeypatch.setattr(subprocess, "run", _fake_run)
@@ -75,7 +75,7 @@ def test_git_show_text_decode_error(monkeypatch: pytest.MonkeyPatch, tmp_path) -
         stdout = b"hello\n\xff\xfe\xffworld\n"
         stderr = b""
 
-    def _fake_run(*args, **kwargs):  # noqa: ANN001
+    def _fake_run(*args, **kwargs):
         return _Proc()
 
     monkeypatch.setattr(subprocess, "run", _fake_run)
@@ -100,7 +100,7 @@ class _FakePopen:
         # Simulate that the process will exit after kill.
         self.returncode = 0
 
-    def communicate(self, timeout: int | None = None):  # noqa: ANN001
+    def communicate(self, timeout: int | None = None):
         # In real Popen, communicate returns remaining content; here it's fine.
         out = self.stdout.read()
         err = self.stderr.read()
@@ -124,7 +124,7 @@ def test_git_show_text_limited_infers_byte_cap_from_chars(
 ) -> None:
     repo_dir = str(tmp_path)
 
-    def _fake_popen(*args, **kwargs):  # noqa: ANN001
+    def _fake_popen(*args, **kwargs):
         return _FakePopen(b"A" * 100, b"", returncode=None)
 
     monkeypatch.setattr(subprocess, "Popen", _fake_popen)
@@ -140,7 +140,7 @@ def test_git_show_text_limited_nonzero_returncode(
 ) -> None:
     repo_dir = str(tmp_path)
 
-    def _fake_popen(*args, **kwargs):  # noqa: ANN001
+    def _fake_popen(*args, **kwargs):
         return _FakePopen(b"", b"fatal: bad object", returncode=1)
 
     monkeypatch.setattr(subprocess, "Popen", _fake_popen)
@@ -158,7 +158,7 @@ def test_git_show_text_limited_truncates_bytes(
 ) -> None:
     repo_dir = str(tmp_path)
 
-    def _fake_popen(*args, **kwargs):  # noqa: ANN001
+    def _fake_popen(*args, **kwargs):
         # 100 bytes of text; max_bytes forces truncation.
         return _FakePopen(b"A" * 100, b"", returncode=None)
 
@@ -185,7 +185,7 @@ def test_git_show_text_limited_truncates_bytes_ignores_kill_returncode(
             self.killed = True
             self.returncode = -9
 
-    def _fake_popen(*args, **kwargs):  # noqa: ANN001
+    def _fake_popen(*args, **kwargs):
         return _KillNonzeroPopen(b"A" * 100, b"", returncode=None)
 
     monkeypatch.setattr(subprocess, "Popen", _fake_popen)
@@ -202,8 +202,8 @@ def test_git_show_text_limited_truncates_chars(
 ) -> None:
     repo_dir = str(tmp_path)
 
-    def _fake_popen(*args, **kwargs):  # noqa: ANN001
-        return _FakePopen("hello world".encode("utf-8"), b"", returncode=0)
+    def _fake_popen(*args, **kwargs):
+        return _FakePopen(b"hello world", b"", returncode=0)
 
     monkeypatch.setattr(subprocess, "Popen", _fake_popen)
 

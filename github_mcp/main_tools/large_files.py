@@ -76,7 +76,7 @@ async def _get_content_metadata(
             f"/repos/{full_name}/contents/{path}",
             params={"ref": ref},
         )
-    except Exception:
+    except Exception:  # noqa: BLE001 - handle optional metadata or report a boundary failure
         return {}
 
     j = data.get("json")
@@ -154,7 +154,7 @@ async def get_file_excerpt(
                         payload.get("message"), str
                     ):
                         message = payload.get("message")
-                except Exception:
+                except Exception:  # noqa: BLE001 - handle optional metadata or report a boundary failure
                     message = None
                 suffix = f" - {message}" if message else ""
                 raise GitHubAPIError(

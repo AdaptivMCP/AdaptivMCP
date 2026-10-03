@@ -141,7 +141,7 @@ def _parse_git_numstat(stdout: str) -> list[dict[str, Any]]:
                 return None
             try:
                 return int(v)
-            except Exception:
+            except Exception:  # noqa: BLE001 - handle optional metadata or report a boundary failure
                 return None
 
         out.append(
@@ -273,7 +273,7 @@ async def workspace_git_diff(
             "truncated": bool(truncated),
             "numstat": numstat,
         }
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - tool boundary translates dependency errors
         return _structured_tool_error(exc, context="workspace_git_diff")
 
 
@@ -368,7 +368,7 @@ async def workspace_create_branch(
             if push_result is not None
             else None,
         }
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - tool boundary translates dependency errors
         return _structured_tool_error(exc, context="workspace_create_branch")
 
 
@@ -444,7 +444,7 @@ async def workspace_delete_branch(
             "delete_remote": _slim_shell_result(delete_remote),
             "delete_local": _slim_shell_result(delete_local),
         }
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - tool boundary translates dependency errors
         return _structured_tool_error(exc, context="workspace_delete_branch")
 
 
@@ -671,7 +671,7 @@ async def workspace_self_heal_branch(
                     for e in sorted(os.listdir(new_repo_dir))
                     if e not in {".git", ".venv-mcp"}
                 ]
-            except Exception:
+            except Exception:  # noqa: BLE001 - handle optional metadata or report a boundary failure
                 entries = []
 
             # Count files excluding .git and .venv-mcp.
@@ -704,7 +704,7 @@ async def workspace_self_heal_branch(
             "diagnostics": diag,
             "snapshot": snapshot,
         }
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - tool boundary translates dependency errors
         return _structured_tool_error(exc, context="workspace_self_heal_branch")
 
 
@@ -737,7 +737,7 @@ async def workspace_sync_status(
             }
         )
         return snapshot
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - tool boundary translates dependency errors
         return _structured_tool_error(exc, context="workspace_sync_status")
 
 
@@ -801,7 +801,7 @@ async def workspace_sync_to_remote(
             "before": before,
             "after": after,
         }
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - tool boundary translates dependency errors
         return _structured_tool_error(exc, context="workspace_sync_to_remote")
 
 
@@ -918,5 +918,5 @@ async def workspace_sync_bidirectional(
             "before": before,
             "after": snapshot,
         }
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - tool boundary translates dependency errors
         return _structured_tool_error(exc, context="workspace_sync_bidirectional")

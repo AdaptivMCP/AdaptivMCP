@@ -2,7 +2,7 @@ import asyncio
 
 
 def test_workspace_batch_missing_ref_fail_fast(monkeypatch):
-    import github_mcp.workspace_tools.batch as batch
+    from github_mcp.workspace_tools import batch
 
     # Avoid touching remote check.
     monkeypatch.setattr(batch, "_remote_branch_exists", lambda *a, **k: True)
@@ -23,7 +23,7 @@ def test_workspace_batch_missing_ref_fail_fast(monkeypatch):
 
 
 def test_workspace_batch_missing_ref_continue_when_not_fail_fast(monkeypatch):
-    import github_mcp.workspace_tools.batch as batch
+    from github_mcp.workspace_tools import batch
 
     class DummyDeps:
         async def clone_repo(self, *_a, **_k):
@@ -63,7 +63,7 @@ def test_workspace_batch_missing_ref_continue_when_not_fail_fast(monkeypatch):
 
 
 def test_workspace_batch_shorthand_ops_maps_to_apply_ops(monkeypatch):
-    import github_mcp.workspace_tools.batch as batch
+    from github_mcp.workspace_tools import batch
 
     seen = {}
 
@@ -101,7 +101,7 @@ def test_workspace_batch_shorthand_ops_maps_to_apply_ops(monkeypatch):
 
 
 def test_workspace_batch_create_branch_if_missing_calls_create(monkeypatch):
-    import github_mcp.workspace_tools.batch as batch
+    from github_mcp.workspace_tools import batch
 
     calls = {}
 
@@ -145,7 +145,7 @@ def test_workspace_batch_create_branch_if_missing_calls_create(monkeypatch):
 
 
 def test_workspace_batch_commit_uses_files_variant_when_files_present(monkeypatch):
-    import github_mcp.workspace_tools.batch as batch
+    from github_mcp.workspace_tools import batch
 
     seen = {"files": 0, "all": 0}
 
@@ -189,7 +189,7 @@ def test_workspace_batch_commit_uses_files_variant_when_files_present(monkeypatc
 
 
 def test_workspace_batch_delete_paths_defaults_allow_recursive_false(monkeypatch):
-    import github_mcp.workspace_tools.batch as batch
+    from github_mcp.workspace_tools import batch
 
     seen = {}
 

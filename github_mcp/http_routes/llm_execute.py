@@ -28,7 +28,7 @@ def build_llm_execute_endpoint():
     async def _endpoint(request: Request) -> JSONResponse:
         try:
             payload = await request.json()
-        except Exception:
+        except Exception:  # noqa: BLE001 - handle optional metadata or report a boundary failure
             payload = {}
 
         analysis = payload.get("analysis") or payload.get("analysis_text")
@@ -53,7 +53,7 @@ def build_llm_execute_endpoint():
         max_calls = payload.get("max_calls", 20)
         try:
             max_calls = int(max_calls)
-        except Exception:
+        except Exception:  # noqa: BLE001 - handle optional metadata or report a boundary failure
             max_calls = 20
 
         calls = extract_tool_calls_from_text(texts, max_calls=max_calls)
@@ -84,7 +84,7 @@ def build_llm_execute_endpoint():
         if max_attempts is not None:
             try:
                 max_attempts = int(max_attempts)
-            except Exception:
+            except Exception:  # noqa: BLE001 - handle optional metadata or report a boundary failure
                 max_attempts = None
 
         response: dict[str, Any] = {

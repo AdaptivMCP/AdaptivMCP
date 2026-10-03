@@ -69,7 +69,7 @@ def _get_controller_revision_info() -> dict[str, Any]:
                 [git_bin, "rev-parse", "--abbrev-ref", "HEAD"], cwd=repo_root, text=True
             ).strip()
             info["git_branch"] = branch
-    except Exception:  # nosec B110
+    except Exception:  # nosec B110  # noqa: BLE001, S110 - optional cleanup or compatibility fallback
         # Avoid failing env validation when git metadata is unavailable.
         pass
 
@@ -232,7 +232,7 @@ async def validate_environment() -> dict[str, Any]:
         max_raw = os.environ.get("ADAPTIV_MCP_LOG_DEPENDENCIES_MAX", "0").strip()
         try:
             max_pkgs = int(max_raw)
-        except Exception:
+        except Exception:  # noqa: BLE001 - handle optional metadata or report a boundary failure
             max_pkgs = 0
 
         deps_level = "ok"
@@ -260,7 +260,7 @@ async def validate_environment() -> dict[str, Any]:
                 deps_details["truncated"] = True
             else:
                 deps_details["packages"] = pkgs
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 - handle optional metadata or report a boundary failure
             deps_level = "warning"
             deps_details.update({"error_type": type(exc).__name__, "error": str(exc)})
 
@@ -443,7 +443,7 @@ async def validate_environment() -> dict[str, Any]:
                     "unique_tools": unique_count,
                 },
             )
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - handle optional metadata or report a boundary failure
         add_check(
             "tool_registry",
             "warning",
@@ -480,13 +480,13 @@ async def validate_environment() -> dict[str, Any]:
 
         try:
             user_resp = await m._github_request("GET", "/user")
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 - handle optional metadata or report a boundary failure
             user_error = exc
 
         if user_resp is None:
             try:
                 app_resp = await m._github_request("GET", "/app")
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001 - handle optional metadata or report a boundary failure
                 add_check(
                     "github_token_details",
                     "warning",
@@ -568,7 +568,7 @@ async def validate_environment() -> dict[str, Any]:
                 # Detect GitHub App tokens via /app (works only for app auth).
                 try:
                     await m._github_request("GET", "/app")
-                except Exception:
+                except Exception:  # noqa: BLE001 - handle optional metadata or report a boundary failure
                     token_type = "fine_grained_pat_or_unknown"  # nosec B105
                 else:
                     token_type = "github_app_token"  # nosec B105
@@ -602,7 +602,7 @@ async def validate_environment() -> dict[str, Any]:
         # Rate limit snapshot (useful for diagnosing 403/429)
         try:
             rl_resp = await m._github_request("GET", "/rate_limit")
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 - handle optional metadata or report a boundary failure
             add_check(
                 "github_rate_limit",
                 "warning",
@@ -632,7 +632,7 @@ async def validate_environment() -> dict[str, Any]:
             repo_response = await m._github_request("GET", f"/repos/{controller_repo}")
             if isinstance(repo_response.get("json"), dict):
                 repo_payload = repo_response.get("json", {})
-        except Exception as exc:  # pragma: no cover - defensive
+        except Exception as exc:  # pragma: no cover - defensive  # noqa: BLE001 - handle optional metadata or report a boundary failure
             add_check(
                 "controller_repo_remote",
                 "error",
@@ -668,7 +668,7 @@ async def validate_environment() -> dict[str, Any]:
             ):
                 try:
                     await m._github_request("GET", path, params=params)
-                except Exception as exc:
+                except Exception as exc:  # noqa: BLE001 - handle optional metadata or report a boundary failure
                     probes.append(
                         {
                             "probe": name,
@@ -721,7 +721,7 @@ async def validate_environment() -> dict[str, Any]:
                             "details": {"status_code": status_code, "error": str(exc)},
                         }
                     )
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001 - handle optional metadata or report a boundary failure
                 probes.append(
                     {
                         "probe": "can_create_pr",
@@ -780,7 +780,7 @@ async def validate_environment() -> dict[str, Any]:
                     f"/repos/{controller_repo}/actions/workflows",
                     params={"per_page": 100},
                 )
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001 - handle optional metadata or report a boundary failure
                 probes.append(
                     {
                         "probe": "can_dispatch_workflow",
@@ -859,7 +859,7 @@ async def validate_environment() -> dict[str, Any]:
                             "workflow_name": chosen_name,
                         }
                         break
-                    except Exception as exc:
+                    except Exception as exc:  # noqa: BLE001 - handle optional metadata or report a boundary failure
                         last_error = {
                             "error_type": type(exc).__name__,
                             "error": str(exc),
@@ -905,7 +905,7 @@ async def validate_environment() -> dict[str, Any]:
                             first = runs_json.get("workflow_runs")[0]
                             if isinstance(first, dict):
                                 run_id = first.get("id")
-                    except Exception:
+                    except Exception:  # noqa: BLE001 - handle optional metadata or report a boundary failure
                         run_id = None
 
                     _dispatch_probe_state.update(
@@ -985,7 +985,7 @@ async def validate_environment() -> dict[str, Any]:
                 "GET",
                 f"/repos/{controller_repo}/branches/{controller_branch}",
             )
-        except Exception as exc:  # pragma: no cover - defensive
+        except Exception as exc:  # pragma: no cover - defensive  # noqa: BLE001 - handle optional metadata or report a boundary failure
             add_check(
                 "controller_branch_remote",
                 "error",
@@ -1011,7 +1011,7 @@ async def validate_environment() -> dict[str, Any]:
                 f"/repos/{controller_repo}/pulls",
                 params={"state": "open", "per_page": 1},
             )
-        except Exception as exc:  # pragma: no cover - defensive
+        except Exception as exc:  # pragma: no cover - defensive  # noqa: BLE001 - handle optional metadata or report a boundary failure
             add_check(
                 "controller_pr_endpoint",
                 "warning",
@@ -1064,7 +1064,7 @@ async def validate_environment() -> dict[str, Any]:
         # Render API validation + owner snapshot (best-effort, read-only).
         try:
             owners_resp = await render_request("GET", "/owners", params={"limit": 5})
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 - handle optional metadata or report a boundary failure
             add_check(
                 "render_api",
                 "warning",

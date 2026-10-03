@@ -110,7 +110,7 @@ async def commit_workspace(
             if push_result is not None
             else None,
         }
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - tool boundary translates dependency errors
         return _structured_tool_error(exc, context="commit_workspace")
 
 
@@ -200,7 +200,7 @@ async def commit_workspace_files(
             if push_result is not None
             else None,
         }
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - tool boundary translates dependency errors
         return _structured_tool_error(exc, context="commit_workspace_files")
 
 
@@ -312,8 +312,7 @@ async def get_workspace_changes_summary(
         n = int(max_files)
         if n <= 0:
             n = 1
-        if n > 5000:
-            n = 5000
+        n = min(n, 5000)
         truncated = len(changes) > n
         changes_out = changes[:n]
 
@@ -325,7 +324,7 @@ async def get_workspace_changes_summary(
             "changes_truncated": truncated,
             "max_files": n,
         }
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - tool boundary translates dependency errors
         return _structured_tool_error(exc, context="get_workspace_changes_summary")
 
 

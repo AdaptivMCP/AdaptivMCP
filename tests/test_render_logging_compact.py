@@ -9,7 +9,7 @@ import pytest
 async def test_render_request_logs_compact_by_default(monkeypatch):
     import httpx
 
-    import github_mcp.render_api as render_api
+    from github_mcp import render_api
 
     monkeypatch.setenv("RENDER_API_KEY", "test-token")
 
@@ -55,7 +55,7 @@ async def test_render_request_logs_compact_by_default(monkeypatch):
 async def test_render_request_logs_details_when_enabled(monkeypatch):
     import httpx
 
-    import github_mcp.render_api as render_api
+    from github_mcp import render_api
 
     monkeypatch.setenv("RENDER_API_KEY", "test-token")
 
@@ -96,7 +96,7 @@ async def test_render_request_logs_details_when_enabled(monkeypatch):
 
 
 def test_render_runtime_defaults_keep_logs_compact(monkeypatch):
-    import github_mcp.config as config
+    from github_mcp import config
 
     # Simulate Render runtime and reload config to recompute defaults.
     monkeypatch.setenv("RENDER", "true")

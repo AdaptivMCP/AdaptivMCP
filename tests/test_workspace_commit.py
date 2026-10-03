@@ -17,18 +17,9 @@ def test_slim_shell_result_strips_and_handles_non_dict():
 
 
 def test_get_workspace_changes_summary_parses_and_filters_prefix(monkeypatch):
-    import github_mcp.workspace_tools.commit as commit
+    from github_mcp.workspace_tools import commit
 
-    status_out = "\n".join(
-        [
-            " M modified.txt",
-            "A  added.txt",
-            "D  deleted.txt",
-            "R  old.txt -> new.txt",
-            "?? untracked.txt",
-            " M sub/only.txt",
-        ]
-    )
+    status_out = " M modified.txt\nA  added.txt\nD  deleted.txt\nR  old.txt -> new.txt\n?? untracked.txt\n M sub/only.txt"
 
     class DummyDeps:
         async def clone_repo(self, *_a, **_k):
@@ -81,7 +72,7 @@ def test_get_workspace_changes_summary_parses_and_filters_prefix(monkeypatch):
 
 
 def test_commit_workspace_files_requires_non_empty_file_list():
-    import github_mcp.workspace_tools.commit as commit
+    from github_mcp.workspace_tools import commit
 
     # commit_workspace_files is wrapped by @mcp_tool, so validation errors are
     # surfaced as a structured error response rather than raising.
@@ -91,9 +82,9 @@ def test_commit_workspace_files_requires_non_empty_file_list():
 
 
 def test_get_workspace_changes_summary_enforces_max_files(monkeypatch):
-    import github_mcp.workspace_tools.commit as commit
+    from github_mcp.workspace_tools import commit
 
-    status_out = "\n".join([" M a.txt", " M b.txt", "?? c.txt"])
+    status_out = " M a.txt\n M b.txt\n?? c.txt"
 
     class DummyDeps:
         async def clone_repo(self, *_a, **_k):
@@ -131,7 +122,7 @@ def test_get_workspace_changes_summary_enforces_max_files(monkeypatch):
 
 
 def test_get_workspace_changes_summary_status_exit_code_returns_error(monkeypatch):
-    import github_mcp.workspace_tools.commit as commit
+    from github_mcp.workspace_tools import commit
 
     class DummyDeps:
         async def clone_repo(self, *_a, **_k):

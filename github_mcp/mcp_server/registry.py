@@ -59,7 +59,7 @@ def _tool_name_variants(tool_name: str) -> list[str]:
         variants.add(raw.rsplit(".", 1)[-1])
 
     # Some clients accidentally include both; normalize them too.
-    for candidate in list(variants):
+    for candidate in variants:
         if "/" in candidate:
             variants.add(candidate.rsplit("/", 1)[-1])
         if "." in candidate:

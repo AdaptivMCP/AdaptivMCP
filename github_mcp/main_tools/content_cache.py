@@ -44,7 +44,7 @@ async def _resolve_ref_snapshot(full_name: str, ref: str | None) -> dict[str, An
             "resolved_ref": resolved_ref,
             "tree_sha": tree_sha,
         }
-    except Exception:
+    except Exception:  # noqa: BLE001 - handle optional metadata or report a boundary failure
         return {
             "requested_ref": requested_ref,
             "resolved_ref": requested_ref,
@@ -107,7 +107,7 @@ async def fetch_files(
                     decoded=decoded,
                 )
                 results[p] = cached
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001 - tool boundary translates dependency errors
                 results[p] = _structured_tool_error(
                     e,
                     context="fetch_files",

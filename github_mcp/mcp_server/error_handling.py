@@ -29,8 +29,6 @@ else:
 
     httpx = _HttpxModule()
 
-from github_mcp.redaction import redact_any
-
 from github_mcp.exceptions import (
     APIError,
     GitHubAPIError,
@@ -41,6 +39,7 @@ from github_mcp.exceptions import (
     WriteApprovalRequiredError,
     WriteNotAuthorizedError,
 )
+from github_mcp.redaction import redact_any
 
 _HIGH_ENTROPY_RE = re.compile(r"^[A-Za-z0-9_\-]{48,}$")
 
@@ -51,7 +50,7 @@ def _env_int(name: str, default: int) -> int:
         return int(default)
     try:
         return int(raw.strip())
-    except Exception:
+    except Exception:  # noqa: BLE001 - handle optional metadata or report a boundary failure
         return int(default)
 
 
@@ -117,7 +116,7 @@ def _sanitize_debug_value(
             return s
 
         lowered = s.strip().lower()
-        if lowered.startswith("bearer ") or lowered.startswith("authorization:"):
+        if lowered.startswith(("bearer ", "authorization:")):
             return "<REDACTED_TOKEN>"
 
         key_is_secret = bool(key) and _SECRET_KEY_RE.search(str(key)) is not None
@@ -152,7 +151,7 @@ def _sanitize_debug_value(
         for k, v in value.items():
             try:
                 key = k if isinstance(k, str) else str(k)
-            except Exception:
+            except Exception:  # noqa: BLE001 - handle optional metadata or report a boundary failure
                 key = "<unprintable_key>"
             out[key] = _sanitize_debug_value(
                 v,
@@ -409,12 +408,12 @@ def _structured_tool_error(
     if args is not None:
         try:
             debug: dict[str, Any] = {
-                "arg_keys": sorted(str(k) for k in args.keys()),
+                "arg_keys": sorted(str(k) for k in args.keys()),  # noqa: SIM118 - honor custom Mapping.keys implementations
             }
             if _env_flag("ADAPTIV_MCP_ERROR_DEBUG_ARGS", default=False):
                 debug["args"] = _sanitize_debug_value(args)
             error_detail["debug"] = debug
-        except Exception:
+        except Exception:  # noqa: BLE001 - handle optional metadata or report a boundary failure
             debug: dict[str, Any] = {"arg_keys": ["<unavailable>"]}
             if _env_flag("ADAPTIV_MCP_ERROR_DEBUG_ARGS", default=False):
                 debug["args"] = {}

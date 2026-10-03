@@ -20,7 +20,7 @@ def test_llm_execute_invalid_json_body_returns_executed_false() -> None:
 
 
 def test_llm_execute_dry_run_does_not_execute(monkeypatch) -> None:
-    import github_mcp.http_routes.llm_execute as llm_execute
+    from github_mcp.http_routes import llm_execute
 
     executed = {"called": False}
 
@@ -45,7 +45,7 @@ def test_llm_execute_dry_run_does_not_execute(monkeypatch) -> None:
 
 
 def test_llm_execute_executes_calls_and_resolves_file_blocks(monkeypatch) -> None:
-    import github_mcp.http_routes.llm_execute as llm_execute
+    from github_mcp.http_routes import llm_execute
 
     observed: dict[str, object] = {}
 
@@ -89,7 +89,7 @@ hello world
 def test_llm_execute_messages_format_filters_non_text_and_coerces_max_calls(
     monkeypatch,
 ) -> None:
-    import github_mcp.http_routes.llm_execute as llm_execute
+    from github_mcp.http_routes import llm_execute
 
     def _extract(texts, *, max_calls: int = 20):
         # Only the first message has string content; others should be ignored.

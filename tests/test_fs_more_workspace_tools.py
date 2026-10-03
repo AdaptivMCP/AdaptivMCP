@@ -1,8 +1,7 @@
 import asyncio
 import os
 
-
-import github_mcp.workspace_tools.fs as fs
+from github_mcp.workspace_tools import fs
 
 
 class DummyWorkspaceTools:
@@ -10,12 +9,12 @@ class DummyWorkspaceTools:
         self.repo_dir = repo_dir
 
     def _workspace_deps(self):
-        async def clone_repo(full_name, ref, preserve_changes=True):  # noqa: ARG001
+        async def clone_repo(full_name, ref, preserve_changes=True):
             return self.repo_dir
 
         return {"clone_repo": clone_repo}
 
-    def _effective_ref_for_repo(self, full_name: str, ref: str) -> str:  # noqa: ARG002
+    def _effective_ref_for_repo(self, full_name: str, ref: str) -> str:
         return ref
 
 

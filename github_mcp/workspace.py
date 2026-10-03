@@ -9,6 +9,7 @@ import shlex
 import shutil
 import sys
 import tempfile
+from pathlib import Path
 from typing import Any
 
 from . import config
@@ -73,7 +74,19 @@ async def _run_shell(
     timeout_seconds: int = 0,
     env: dict[str, str] | None = None,
 ) -> dict[str, Any]:
-    """Execute a shell command with author/committer env vars injected."""
+    """Execute a shell command without inheriting service credentials."""
+    return await _run_process(cmd, cwd=cwd, timeout_seconds=timeout_seconds, env=env)
+
+
+async def _run_process(
+    cmd: str | list[str],
+    *,
+    cwd: str | None = None,
+    timeout_seconds: int = 0,
+    env: dict[str, str] | None = None,
+    authenticated_env: dict[str, str] | None = None,
+) -> dict[str, Any]:
+    """Shared process lifecycle; authenticated env is supplied only by GitService."""
     shell_executable = os.environ.get("SHELL")
     if os.name == "nt":
         shell_executable = shell_executable or shutil.which("bash")
@@ -105,15 +118,23 @@ async def _run_shell(
         "GH_TOKEN",
         "GITHUB_PAT",
         "GITHUB_OAUTH_TOKEN",
+        "GH_PAT",
+        "ADAPTIV_MCP_AUTH_TOKEN",
+        "MCP_AUTH_TOKEN",
+        "RENDER_API_KEY",
+        "RENDER_API_TOKEN",
+        "RENDER_TOKEN",
         "GIT_HTTP_EXTRAHEADER",
         "GIT_ASKPASS",
         "SSH_ASKPASS",
     ):
         proc_env.pop(key, None)
     for key in list(proc_env):
-        if key.startswith("GIT_CONFIG_KEY_") or key.startswith("GIT_CONFIG_VALUE_"):
+        if key.startswith(("GIT_CONFIG_KEY_", "GIT_CONFIG_VALUE_")):
             proc_env.pop(key, None)
     proc_env.pop("GIT_CONFIG_COUNT", None)
+    if authenticated_env is not None:
+        proc_env.update(authenticated_env)
 
     # Ensure bundled ripgrep (vendor/rg) is available as `rg` in repo mirror shells.
     # This avoids reliance on system packages in provider environments.
@@ -133,20 +154,24 @@ async def _run_shell(
                 if parent == candidate:
                     break
                 candidate = parent
-        except Exception:  # nosec B110
+        except Exception:  # nosec B110  # noqa: BLE001, S110 - optional cleanup or compatibility fallback
             # Avoid failing the tool due to PATH decoration.
             pass
 
     start_new_session = os.name != "nt"
-    proc = await asyncio.create_subprocess_shell(
-        cmd,
-        cwd=cwd,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE,
-        executable=shell_executable,
-        env=proc_env,
-        start_new_session=start_new_session,
-    )
+    process_kwargs = {
+        "cwd": cwd,
+        "stdout": asyncio.subprocess.PIPE,
+        "stderr": asyncio.subprocess.PIPE,
+        "env": proc_env,
+        "start_new_session": start_new_session,
+    }
+    if isinstance(cmd, list):
+        proc = await asyncio.create_subprocess_exec(*cmd, **process_kwargs)
+    else:
+        proc = await asyncio.create_subprocess_shell(
+            cmd, executable=shell_executable, **process_kwargs
+        )
 
     async def _terminate_process() -> None:
         """Best-effort termination for the subprocess and its children.
@@ -161,26 +186,26 @@ async def _run_shell(
 
             try:
                 os.killpg(proc.pid, signal.SIGTERM)
-            except Exception:  # nosec B110
+            except Exception:  # nosec B110  # noqa: BLE001, S110 - optional cleanup or compatibility fallback
                 pass
             try:
                 await asyncio.wait_for(proc.wait(), timeout=3)
                 return
-            except Exception:
+            except Exception:  # noqa: BLE001 - handle optional metadata or report a boundary failure
                 # If the process group does not stop promptly, escalate.
                 try:
                     os.killpg(proc.pid, signal.SIGKILL)
-                except Exception:  # nosec B110
+                except Exception:  # nosec B110  # noqa: BLE001, S110 - optional cleanup or compatibility fallback
                     pass
                 # Ensure the process is reaped so pipes close and communicate() does not hang.
                 try:
                     await asyncio.wait_for(proc.wait(), timeout=3)
-                except Exception:  # nosec B110
+                except Exception:  # nosec B110  # noqa: BLE001, S110 - optional cleanup or compatibility fallback
                     pass
         else:
             try:
                 proc.kill()
-            except Exception:  # nosec B110
+            except Exception:  # nosec B110  # noqa: BLE001, S110 - optional cleanup or compatibility fallback
                 pass
 
     try:
@@ -203,12 +228,12 @@ async def _run_shell(
                 try:
                     while task.cancelling():
                         task.uncancel()
-                except Exception:  # nosec B110
+                except Exception:  # nosec B110  # noqa: BLE001, S110 - optional cleanup or compatibility fallback
                     pass
             # Shield cleanup so the subprocess is terminated even if the caller
             # is cancelled again mid-cleanup.
             await asyncio.shield(_terminate_process())
-        except Exception:  # nosec B110
+        except Exception:  # nosec B110  # noqa: BLE001, S110 - optional cleanup or compatibility fallback
             pass
         raise
     except asyncio.TimeoutError:
@@ -217,7 +242,7 @@ async def _run_shell(
         # child processes (e.g. pytest workers) don't keep pipes open.
         try:
             await _terminate_process()
-        except Exception:  # nosec B110
+        except Exception:  # nosec B110  # noqa: BLE001, S110 - optional cleanup or compatibility fallback
             pass
 
         # Best-effort output collection after timeout. Keep configurable.
@@ -227,7 +252,7 @@ async def _run_shell(
             )
             try:
                 collect_timeout_int = int(collect_timeout)
-            except Exception:
+            except Exception:  # noqa: BLE001 - handle optional metadata or report a boundary failure
                 collect_timeout_int = 0
 
             # Never block indefinitely while collecting output after a timeout.
@@ -237,7 +262,7 @@ async def _run_shell(
             stdout_bytes, stderr_bytes = await asyncio.wait_for(
                 proc.communicate(), timeout=float(collect_timeout_int)
             )
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 - handle optional metadata or report a boundary failure
             # Do not swallow errors while collecting stdout/stderr after a timeout.
             # When communicate() fails (e.g., pipes already closed), return a
             # diagnostic string in stderr so callers can surface meaningful context.
@@ -246,7 +271,7 @@ async def _run_shell(
                 stderr_bytes = (
                     f"Failed to collect process output after timeout: {exc.__class__.__name__}: {exc}\n"
                 ).encode("utf-8", errors="replace")
-            except Exception:
+            except Exception:  # noqa: BLE001 - handle optional metadata or report a boundary failure
                 stderr_bytes = b"Failed to collect process output after timeout.\n"
 
     raw_stdout = stdout_bytes.decode("utf-8", errors="replace")
@@ -271,7 +296,7 @@ def _append_git_config_env(env: dict[str, str], key: str, value: str) -> None:
     # Git reads these: GIT_CONFIG_COUNT, GIT_CONFIG_KEY_<n>, GIT_CONFIG_VALUE_<n>
     try:
         existing = int(env.get("GIT_CONFIG_COUNT", "0") or "0")
-    except Exception:
+    except Exception:  # noqa: BLE001 - handle optional metadata or report a boundary failure
         existing = 0
 
     idx = existing
@@ -289,15 +314,21 @@ def _authenticated_git_command(cmd: str) -> str:
     if not tokens or os.path.basename(tokens[0]) not in {"git", "git.exe"}:
         raise GitHubAPIError("Authenticated GitService accepts only git commands")
     if any(
-        token in {"-c", "--config", "--config-env"} or token.startswith(("--config=", "--config-env=", "-c"))
+        token in {"-c", "--config", "--config-env"}
+        or token.startswith(("--config=", "--config-env=", "-c"))
         for token in tokens[1:]
     ):
-        raise GitHubAPIError("Authenticated git commands cannot override Git configuration")
+        raise GitHubAPIError(
+            "Authenticated git commands cannot override Git configuration"
+        )
     safe_tokens = [
         tokens[0],
-        "-c", "core.hooksPath=/dev/null",
-        "-c", "core.fsmonitor=false",
-        "-c", "core.pager=cat",
+        "-c",
+        "core.hooksPath=/dev/null",
+        "-c",
+        "core.fsmonitor=false",
+        "-c",
+        "core.pager=cat",
         *tokens[1:],
     ]
     return " ".join(shlex.quote(token) for token in safe_tokens)
@@ -311,17 +342,16 @@ async def _run_git_authenticated(
     env: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     """Run one trusted Git operation with GitHub credentials only in its env."""
-    merged = dict(env or {})
-    merged.update(_git_auth_env())
-    merged["GIT_CONFIG_NOSYSTEM"] = "1"
-    merged["GIT_CONFIG_GLOBAL"] = os.devnull
-    merged.pop("GIT_ASKPASS", None)
-    merged.pop("SSH_ASKPASS", None)
-    return await _run_shell(
-        _authenticated_git_command(cmd),
+    command = shlex.split(_authenticated_git_command(cmd))
+    authenticated_env = _git_auth_env()
+    authenticated_env["GIT_CONFIG_NOSYSTEM"] = "1"
+    authenticated_env["GIT_CONFIG_GLOBAL"] = os.devnull
+    return await _run_process(
+        command,
         cwd=cwd,
         timeout_seconds=timeout_seconds,
-        env=merged,
+        env=env,
+        authenticated_env=authenticated_env,
     )
 
 
@@ -392,6 +422,7 @@ def _workspace_path(full_name: str, ref: str) -> str:
     base_dir = getattr(main_module, "WORKSPACE_BASE_DIR", config.WORKSPACE_BASE_DIR)
     safe_ref = _sanitize_workspace_ref(ref)
     return workspace_identity_path(base_dir, full_name, safe_ref)
+
 
 def _sanitize_workspace_ref(ref: str) -> str:
     """Convert an arbitrary ref string into a safe workspace directory name."""
@@ -644,6 +675,7 @@ async def _clone_repo(
             full_name, ref=ref, preserve_changes=preserve_changes
         )
 
+
 async def _prepare_temp_virtualenv(repo_dir: str) -> dict[str, str]:
     """Ensure the workspace virtualenv exists and return env vars that activate it.
 
@@ -753,10 +785,11 @@ async def _prepare_temp_virtualenv(repo_dir: str) -> dict[str, str]:
             try:
                 await _ensure_pip(venv_dir)
                 os.makedirs(venv_dir, exist_ok=True)
-                with open(ready_marker, "w", encoding="utf-8") as handle:
-                    handle.write("ok\n")
+                await asyncio.to_thread(
+                    Path(ready_marker).write_text, "ok\n", encoding="utf-8"
+                )
                 return _activation_env(venv_dir)
-            except Exception:
+            except Exception:  # noqa: BLE001 - handle optional metadata or report a boundary failure
                 shutil.rmtree(venv_dir, ignore_errors=True)
 
         # If a venv exists but is partially deleted, remove it.
@@ -790,8 +823,7 @@ async def _prepare_temp_virtualenv(repo_dir: str) -> dict[str, str]:
 
         await _ensure_pip(venv_dir)
         os.makedirs(venv_dir, exist_ok=True)
-        with open(ready_marker, "w", encoding="utf-8") as handle:
-            handle.write("ok\n")
+        await asyncio.to_thread(Path(ready_marker).write_text, "ok\n", encoding="utf-8")
         return _activation_env(venv_dir)
 
 
@@ -867,7 +899,7 @@ def _maybe_unescape_unified_diff(patch: str) -> str:
 
     try:
         return patch.encode("utf-8").decode("unicode_escape")
-    except Exception:
+    except Exception:  # noqa: BLE001 - handle optional metadata or report a boundary failure
         return patch.replace("\\r\\n", "\n").replace("\\n", "\n").replace("\\t", "\t")
 
 
@@ -898,9 +930,7 @@ def _is_hunk_header_with_ranges(line: str) -> bool:
         nums = rest.split(",", 1)
         if not nums[0].isdigit():
             return False
-        if len(nums) == 2 and nums[1] and not nums[1].isdigit():
-            return False
-        return True
+        return not (len(nums) == 2 and nums[1] and not nums[1].isdigit())
 
     return _valid_range(parts[1], "-") and _valid_range(parts[2], "+")
 
@@ -1368,7 +1398,7 @@ async def _apply_patch_to_repo(repo_dir: str, patch: str) -> None:
     finally:
         try:
             os.remove(patch_path)
-        except Exception:  # nosec B110
+        except Exception:  # nosec B110  # noqa: BLE001, S110 - optional cleanup or compatibility fallback
             pass
 
 
@@ -1376,8 +1406,8 @@ __all__ = [
     "_apply_patch_to_repo",
     "_clone_repo",
     "_prepare_temp_virtualenv",
-    "_stop_workspace_virtualenv",
-    "_workspace_virtualenv_status",
     "_run_shell",
+    "_stop_workspace_virtualenv",
     "_workspace_path",
+    "_workspace_virtualenv_status",
 ]

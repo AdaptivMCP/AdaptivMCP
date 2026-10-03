@@ -91,7 +91,7 @@ def test_slim_terminal_command_payload_normalizes_and_counts():
 
 
 def test_run_tests_adds_cov_flags_and_no_tests_status(monkeypatch):
-    import github_mcp.workspace_tools.suites as suites
+    from github_mcp.workspace_tools import suites
 
     seen = {}
 
@@ -122,7 +122,7 @@ def test_run_tests_adds_cov_flags_and_no_tests_status(monkeypatch):
 
 
 def test_run_lint_suite_falls_back_when_terminal_command_is_mocked(monkeypatch):
-    import github_mcp.workspace_tools.suites as suites
+    from github_mcp.workspace_tools import suites
 
     calls: list[str] = []
 

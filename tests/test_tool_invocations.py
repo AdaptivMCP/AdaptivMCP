@@ -9,7 +9,7 @@ import pytest
 
 TestClient = pytest.importorskip("starlette.testclient").TestClient
 
-import main  # noqa: E402
+import main
 
 
 def _wait_for_status(
@@ -26,7 +26,7 @@ def _wait_for_status(
 
 
 def test_async_tool_invocation_completes(monkeypatch: Any) -> None:
-    import github_mcp.http_routes.tool_registry as tool_registry
+    from github_mcp.http_routes import tool_registry
 
     class Tool:
         name = "async_tool"
@@ -54,7 +54,7 @@ def test_async_tool_invocation_completes(monkeypatch: Any) -> None:
 
 
 def test_async_tool_invocation_cancelled(monkeypatch: Any) -> None:
-    import github_mcp.http_routes.tool_registry as tool_registry
+    from github_mcp.http_routes import tool_registry
 
     class Tool:
         name = "slow_tool"

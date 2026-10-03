@@ -3,8 +3,8 @@ from __future__ import annotations
 from starlette.applications import Starlette
 from starlette.testclient import TestClient
 
-from github_mcp.http_routes import healthz
 from github_mcp.exceptions import GitHubAuthError
+from github_mcp.http_routes import healthz
 
 
 def _build_client() -> TestClient:

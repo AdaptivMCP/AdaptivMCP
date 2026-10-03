@@ -52,7 +52,7 @@ def test_workspace_deps_does_not_inject_git_auth_into_shell(monkeypatch) -> None
 
     monkeypatch.setattr(main, "_run_shell", _stub_run_shell)
     monkeypatch.setattr(
-        _shared, "_git_auth_env", lambda: {"GIT_HTTP_EXTRAHEADER": "auth"}
+        "github_mcp.workspace._git_auth_env", lambda: {"GIT_HTTP_EXTRAHEADER": "auth"}
     )
 
     deps = _shared._workspace_deps()

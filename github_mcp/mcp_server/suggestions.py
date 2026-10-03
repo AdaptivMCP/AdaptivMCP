@@ -27,7 +27,7 @@ def _similarity(a: str, b: str) -> float:
 
     try:
         return difflib.SequenceMatcher(None, a, b).ratio()
-    except Exception:
+    except Exception:  # noqa: BLE001 - handle optional metadata or report a boundary failure
         return 0.0
 
 
@@ -46,7 +46,7 @@ def rank_names(requested: str, options: Iterable[str]) -> list[tuple[float, str]
             ranked.append((float(score), o))
         ranked.sort(key=lambda t: (-t[0], t[1]))
         return ranked
-    except Exception:
+    except Exception:  # noqa: BLE001 - handle optional metadata or report a boundary failure
         return []
 
 
@@ -140,7 +140,7 @@ def expected_args_from_signature(signature: inspect.Signature | None) -> dict[st
         out["required"] = required
         out["optional"] = optional
         return out
-    except Exception:
+    except Exception:  # noqa: BLE001 - handle optional metadata or report a boundary failure
         return out
 
 
@@ -246,7 +246,7 @@ def augment_structured_error_for_bad_args(
         expected_all = set(expected.get("all") or [])
         accepts_var_kwargs = bool(expected.get("accepts_var_kwargs"))
 
-        provided_keys = [str(k) for k in provided_kwargs.keys() if k is not None]
+        provided_keys = [str(k) for k in provided_kwargs if k is not None]
         unknown = [
             k
             for k in provided_keys
@@ -305,7 +305,7 @@ def augment_structured_error_for_bad_args(
                 details.setdefault("unknown_args", unknown)
             if missing:
                 details.setdefault("missing_args", missing)
-    except Exception:
+    except Exception:  # noqa: BLE001 - handle optional metadata or report a boundary failure
         return structured_error
 
     return structured_error

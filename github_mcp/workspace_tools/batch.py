@@ -53,7 +53,7 @@ def _as_str(value: Any, default: str | None = None) -> str | None:
 def _as_int(value: Any, default: int) -> int:
     try:
         return int(value)
-    except Exception:
+    except Exception:  # noqa: BLE001 - handle optional metadata or report a boundary failure
         return default
 
 
@@ -511,5 +511,5 @@ async def workspace_batch(
             "plans": out_plans,
         }
 
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - tool boundary translates dependency errors
         return _structured_tool_error(exc, context="workspace_batch")

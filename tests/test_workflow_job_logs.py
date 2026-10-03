@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 from contextlib import asynccontextmanager
 from types import SimpleNamespace
+from typing import ClassVar
 
 import pytest
 
@@ -31,7 +32,7 @@ def test_get_job_logs_uses_fallback_client_factory(
 
     class DummyResponse:
         status_code = 200
-        headers = {"Content-Type": "application/zip"}
+        headers: ClassVar[dict[str, str]] = {"Content-Type": "application/zip"}
         content = b"not-a-zip"
         text = "not-a-zip"
 

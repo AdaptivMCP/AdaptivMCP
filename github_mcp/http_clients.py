@@ -108,10 +108,10 @@ else:
 
     httpx = _HttpxModule()
 
-from github_mcp.mcp_server.context import get_request_context  # noqa: E402
+from github_mcp.mcp_server.context import get_request_context
 
-from .async_utils import active_event_loop  # noqa: E402
-from .config import (  # noqa: E402
+from .async_utils import active_event_loop
+from .config import (
     GITHUB_API_BASE,
     GITHUB_API_BASE_URL,
     GITHUB_LOGGER,
@@ -129,7 +129,11 @@ from .config import (  # noqa: E402
     MAX_CONCURRENCY,
     summarize_request_context,
 )
-from .exceptions import GitHubAPIError, GitHubAuthError, GitHubRateLimitError  # noqa: E402
+from .exceptions import (
+    GitHubAPIError,
+    GitHubAuthError,
+    GitHubRateLimitError,
+)
 
 _loop_semaphores: weakref.WeakKeyDictionary[
     asyncio.AbstractEventLoop, asyncio.Semaphore
@@ -268,16 +272,12 @@ def _is_rate_limit_response(
     if resp.headers.get("X-RateLimit-Remaining") == "0":
         return True
     # Keep the substring checks stable but avoid duplicated / shadowed conditions.
-    if any(
-        marker in message_lower
-        for marker in (
-            "secondary rate limit",
-            "rate limit",
-            "abuse detection",
+    return bool(
+        any(
+            marker in message_lower
+            for marker in ("secondary rate limit", "rate limit", "abuse detection")
         )
-    ):
-        return True
-    return False
+    )
 
 
 def _get_search_rate_limit_state() -> dict[str, Any]:
@@ -481,10 +481,7 @@ def _allow_rate_limit_retries(
     if m in _RETRYABLE_GITHUB_METHODS:
         return True
 
-    if m == "POST" and (path or "").rstrip("/") == "/graphql":
-        return True
-
-    return False
+    return bool(m == "POST" and (path or "").rstrip("/") == "/graphql")
 
 
 async def _github_request(
@@ -507,10 +504,7 @@ async def _github_request(
 
     while True:
         started = time.perf_counter()
-        try:
-            client = client_factory()
-        except GitHubAuthError:
-            raise
+        client = client_factory()
 
         try:
             resp = await _send_request(
@@ -651,8 +645,8 @@ async def _github_request(
 
 
 __all__ = [
-    "_get_concurrency_semaphore",
     "_external_client_instance",
+    "_get_concurrency_semaphore",
     "_get_github_token",
     "_github_client_instance",
     "_github_request",

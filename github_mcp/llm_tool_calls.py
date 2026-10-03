@@ -115,7 +115,9 @@ def extract_file_blocks_from_text(
     return blocks
 
 
-_BLOCK_REF_RE = re.compile(r"^\s*@(?P<kind>file|block)\s*:\s*(?P<key>.+?)\s*$", re.I)
+_BLOCK_REF_RE = re.compile(
+    r"^\s*@(?P<kind>file|block)\s*:\s*(?P<key>.+?)\s*$", re.IGNORECASE
+)
 
 
 def resolve_block_references(value: Any, blocks: dict[str, str]) -> Any:
@@ -168,7 +170,7 @@ def _coerce_json(value: Any) -> Any:
         return value
     try:
         return json.loads(stripped)
-    except Exception:
+    except Exception:  # noqa: BLE001 - handle optional metadata or report a boundary failure
         return value
 
 
@@ -291,7 +293,7 @@ def extract_tool_calls_from_text(
 
             try:
                 parsed = json.loads(body)
-            except Exception:  # nosec B112
+            except Exception:  # nosec B112  # noqa: BLE001, S112 - report or skip an invalid item without aborting the batch
                 continue
 
             for tool_name, args in _normalize_call_object(parsed):

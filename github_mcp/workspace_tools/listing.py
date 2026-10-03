@@ -1,5 +1,6 @@
 # Split from github_mcp.tools_workspace (generated).
 
+import asyncio
 import hashlib
 import os
 import posixpath
@@ -57,7 +58,7 @@ def _sha256_limited(path: str, *, max_bytes: int) -> tuple[str | None, bool]:
         truncated = False
         try:
             truncated = os.path.getsize(path) > max_bytes
-        except Exception:
+        except Exception:  # noqa: BLE001 - handle optional metadata or report a boundary failure
             truncated = False
         return h.hexdigest(), truncated
     except OSError:
@@ -84,14 +85,14 @@ def _count_lines_limited(path: str, *, max_bytes: int) -> tuple[int | None, bool
         truncated = False
         try:
             truncated = os.path.getsize(path) > max_bytes
-        except Exception:
+        except Exception:  # noqa: BLE001 - handle optional metadata or report a boundary failure
             truncated = False
         # If file does not end with newline, approximate by +1 when non-empty.
         if lines == 0:
             try:
                 if os.path.getsize(path) > 0:
                     lines = 1
-            except Exception:  # nosec B110
+            except Exception:  # nosec B110  # noqa: BLE001, S110 - optional cleanup or compatibility fallback
                 pass
         return int(lines), truncated
     except OSError:
@@ -154,7 +155,7 @@ def _is_within_dir(path: str, root: str) -> bool:
         root_real = os.path.realpath(root)
         path_real = os.path.realpath(path)
         return os.path.commonpath([root_real, path_real]) == root_real
-    except Exception:
+    except Exception:  # noqa: BLE001 - handle optional metadata or report a boundary failure
         return False
 
 
@@ -203,9 +204,8 @@ async def list_workspace_files(
     """
 
     # Alias: some clients use max_results instead of max_files.
-    if max_results is not None:
-        if max_files is None:
-            max_files = max_results
+    if max_results is not None and max_files is None:
+        max_files = max_results
         # If both are provided, keep both values for observability, but do not
         # enforce them as output limits.
 
@@ -347,7 +347,7 @@ async def list_workspace_files(
             "max_files": max_files,
             "max_depth": max_depth,
         }
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - tool boundary translates dependency errors
         return _structured_tool_error(exc, context="list_workspace_files")
 
 
@@ -517,7 +517,7 @@ async def find_workspace_paths(
             "truncated": bool(truncated),
             "scanned": int(scanned),
         }
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - tool boundary translates dependency errors
         return _structured_tool_error(exc, context="find_workspace_paths")
 
 
@@ -579,24 +579,23 @@ async def search_workspace(
         if start_rel == ".":
             start_rel = ""
 
-        if not include_hidden:
-            if _has_hidden_segment(start_rel):
-                return {
-                    "full_name": full_name,
-                    "ref": effective_ref,
-                    "path": normalized_path if path else "",
-                    "query": query,
-                    "case_sensitive": case_sensitive,
-                    "used_regex": bool(regex),
-                    "results": [],
-                    "truncated": False,
-                    "cursor": int(cursor),
-                    "next_cursor": None,
-                    "files_scanned": 0,
-                    "files_skipped": 0,
-                    "max_results": max_results,
-                    "max_file_bytes": max_file_bytes,
-                }
+        if not include_hidden and _has_hidden_segment(start_rel):
+            return {
+                "full_name": full_name,
+                "ref": effective_ref,
+                "path": normalized_path if path else "",
+                "query": query,
+                "case_sensitive": case_sensitive,
+                "used_regex": bool(regex),
+                "results": [],
+                "truncated": False,
+                "cursor": int(cursor),
+                "next_cursor": None,
+                "files_scanned": 0,
+                "files_skipped": 0,
+                "max_results": max_results,
+                "max_file_bytes": max_file_bytes,
+            }
 
         if not query:
             return {
@@ -661,7 +660,7 @@ async def search_workspace(
                 if not case_sensitive:
                     hay = hay.lower()
                 return q in hay
-            except Exception:
+            except Exception:  # noqa: BLE001 - handle optional metadata or report a boundary failure
                 return False
 
         results: list[dict[str, Any]] = []
@@ -670,87 +669,92 @@ async def search_workspace(
         matches_seen = 0
         truncated = False
         next_cursor: int | None = None
-        walk_iter = (
-            [(os.path.dirname(start), [], [os.path.basename(start)])]
-            if single_file
-            else os.walk(start)
-        )
-        for cur_dir, dirnames, filenames in walk_iter:
-            dirnames[:] = [d for d in dirnames if d != ".git"]
-            if not include_hidden:
-                dirnames[:] = [d for d in dirnames if not d.startswith(".")]
 
-            # Keep results deterministic (important for cursor pagination).
-            dirnames.sort()
-            filenames.sort()
+        def _scan_files() -> None:
+            nonlocal files_scanned, files_skipped, matches_seen, truncated, next_cursor
+            walk_iter = (
+                [(os.path.dirname(start), [], [os.path.basename(start)])]
+                if single_file
+                else os.walk(start)
+            )
+            for cur_dir, dirnames, filenames in walk_iter:
+                dirnames[:] = [d for d in dirnames if d != ".git"]
+                if not include_hidden:
+                    dirnames[:] = [d for d in dirnames if not d.startswith(".")]
 
-            for fname in filenames:
-                if not include_hidden and fname.startswith("."):
-                    continue
+                # Keep results deterministic (important for cursor pagination).
+                dirnames.sort()
+                filenames.sort()
 
-                abs_path = os.path.join(cur_dir, fname)
-                try:
-                    st = os.stat(abs_path)
-                except OSError:
-                    files_skipped += 1
-                    continue
+                for fname in filenames:
+                    if not include_hidden and fname.startswith("."):
+                        continue
 
-                if max_file_bytes is not None and max_file_bytes > 0:
+                    abs_path = os.path.join(cur_dir, fname)
                     try:
-                        if st.st_size > max_file_bytes:
-                            files_skipped += 1
-                            continue
-                    except Exception:
+                        st = os.stat(abs_path)
+                    except OSError:
                         files_skipped += 1
                         continue
 
-                # Skip probable binaries.
-                try:
-                    with open(abs_path, "rb") as bf:
-                        sample = bf.read(2048)
-                        if b"\x00" in sample:
+                    if max_file_bytes is not None and max_file_bytes > 0:
+                        try:
+                            if st.st_size > max_file_bytes:
+                                files_skipped += 1
+                                continue
+                        except Exception:  # noqa: BLE001 - report or skip an invalid item without aborting the batch
                             files_skipped += 1
                             continue
-                except OSError:
-                    files_skipped += 1
-                    continue
 
-                files_scanned += 1
-                rel_path = os.path.relpath(abs_path, root)
-
-                try:
-                    with open(abs_path, encoding="utf-8", errors="ignore") as tf:
-                        for i, line in enumerate(tf, start=1):
-                            if not _match_line(line):
+                    # Skip probable binaries.
+                    try:
+                        with open(abs_path, "rb") as bf:
+                            sample = bf.read(2048)
+                            if b"\x00" in sample:
+                                files_skipped += 1
                                 continue
+                    except OSError:
+                        files_skipped += 1
+                        continue
 
-                            # Offset pagination across the global match stream.
-                            if matches_seen < cursor:
+                    files_scanned += 1
+                    rel_path = os.path.relpath(abs_path, root)
+
+                    try:
+                        with open(abs_path, encoding="utf-8", errors="ignore") as tf:
+                            for i, line in enumerate(tf, start=1):
+                                if not _match_line(line):
+                                    continue
+
+                                # Offset pagination across the global match stream.
+                                if matches_seen < cursor:
+                                    matches_seen += 1
+                                    continue
                                 matches_seen += 1
-                                continue
-                            matches_seen += 1
 
-                            results.append(
-                                {
-                                    "file": rel_path,
-                                    "line": i,
-                                    "text": line.rstrip("\n"),
-                                }
-                            )
+                                results.append(
+                                    {
+                                        "file": rel_path,
+                                        "line": i,
+                                        "text": line.rstrip("\n"),
+                                    }
+                                )
 
-                            if len(results) >= max_results:
-                                truncated = True
-                                next_cursor = cursor + len(results)
-                                break
-                except OSError:
-                    files_skipped += 1
-                    continue
+                                if len(results) >= max_results:
+                                    truncated = True
+                                    next_cursor = cursor + len(results)
+                                    break
+                    except OSError:
+                        files_skipped += 1
+                        continue
+
+                    if truncated:
+                        break
 
                 if truncated:
                     break
 
-            if truncated:
-                break
+        await asyncio.to_thread(_scan_files)
 
         # Return after scanning the full walk.
         return {
@@ -769,7 +773,7 @@ async def search_workspace(
             "max_results": max_results,
             "max_file_bytes": max_file_bytes,
         }
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - tool boundary translates dependency errors
         return _structured_tool_error(exc, context="search_workspace")
 
 
@@ -890,7 +894,7 @@ async def scan_workspace_tree(
                         results.append(
                             {"path": rp, "type": "dir", "size_bytes": int(st.st_size)}
                         )
-                    except Exception:
+                    except Exception:  # noqa: BLE001 - handle optional metadata or report a boundary failure
                         results.append({"path": rp, "type": "dir", "size_bytes": None})
                     yielded += 1
                 if truncated:
@@ -972,5 +976,5 @@ async def scan_workspace_tree(
             "results": results,
             "truncated": bool(truncated),
         }
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - tool boundary translates dependency errors
         return _structured_tool_error(exc, context="scan_workspace_tree")

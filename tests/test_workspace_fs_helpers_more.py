@@ -4,7 +4,7 @@ import os
 
 import pytest
 
-import github_mcp.workspace_tools.fs as fs
+from github_mcp.workspace_tools import fs
 
 
 def test_workspace_read_text_limited_missing(tmp_path: pytest.TempPathFactory) -> None:

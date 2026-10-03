@@ -11,7 +11,7 @@ def test_shell_children_scrub_github_credentials(monkeypatch):
 
     result = asyncio.run(
         workspace._run_shell(
-            "python -c 'import os; print(os.getenv(\"GITHUB_TOKEN\")); print(os.getenv(\"GH_TOKEN\"))'",
+            'python -c \'import os; print(os.getenv("GITHUB_TOKEN")); print(os.getenv("GH_TOKEN"))\'',
             timeout_seconds=10,
         )
     )
@@ -41,7 +41,7 @@ def test_authenticated_git_command_rejects_config_overrides():
     ):
         try:
             workspace._authenticated_git_command(command)
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 - handle optional metadata or report a boundary failure
             assert "configuration" in str(exc).lower()
         else:
             raise AssertionError("unsafe git configuration override was accepted")
@@ -49,23 +49,39 @@ def test_authenticated_git_command_rejects_config_overrides():
 
 def test_authenticated_git_runner_keeps_credentials_out_of_generic_shell(monkeypatch):
     from github_mcp import workspace
-    from github_mcp.workspace_tools import _shared
 
     captured = {}
 
-    async def fake_run_shell(cmd, *, cwd=None, timeout_seconds=0, env=None):
-        captured["cmd"] = cmd
-        captured["env"] = dict(env or {})
-        return {"exit_code": 0, "stdout": "", "stderr": ""}
+    class FakeProcess:
+        returncode = 0
 
-    monkeypatch.setattr(workspace, "_run_shell", fake_run_shell)
+        async def communicate(self):
+            return b"", b""
+
+    async def fake_exec(*args, **kwargs):
+        captured["args"] = args
+        captured["env"] = kwargs["env"]
+        return FakeProcess()
+
+    async def deny_shell(*args, **kwargs):
+        raise AssertionError("Authenticated Git must not invoke a shell")
+
+    monkeypatch.setattr(workspace.asyncio, "create_subprocess_exec", fake_exec)
+    monkeypatch.setattr(workspace.asyncio, "create_subprocess_shell", deny_shell)
     monkeypatch.setattr(workspace, "_get_github_token", lambda: "secret-token")
+    monkeypatch.setenv("GITHUB_TOKEN", "parent-secret")
+    monkeypatch.setenv("ADAPTIV_MCP_AUTH_TOKEN", "server-secret")
 
     result = asyncio.run(
         workspace._run_git_authenticated(
             "git push origin HEAD:feature",
             cwd="/tmp/repo",
             timeout_seconds=10,
+            env={
+                "GIT_CONFIG_COUNT": "2",
+                "GIT_CONFIG_KEY_1": "core.hooksPath",
+                "GIT_CONFIG_VALUE_1": "/untrusted/hooks",
+            },
         )
     )
 
@@ -73,7 +89,13 @@ def test_authenticated_git_runner_keeps_credentials_out_of_generic_shell(monkeyp
     assert captured["env"]["GIT_HTTP_EXTRAHEADER"].startswith("Authorization: Basic ")
     assert captured["env"]["GIT_CONFIG_NOSYSTEM"] == "1"
     assert captured["env"]["GIT_CONFIG_GLOBAL"]
-    assert "core.hooksPath=/dev/null" in captured["cmd"]
+    assert "core.hooksPath=/dev/null" in captured["args"]
+    assert captured["args"][-2:] == ("origin", "HEAD:feature")
+    assert "GITHUB_TOKEN" not in captured["env"]
+    assert "ADAPTIV_MCP_AUTH_TOKEN" not in captured["env"]
+    assert captured["env"]["GIT_CONFIG_KEY_0"] == "http.extraHeader"
+    assert captured["env"]["GIT_CONFIG_COUNT"] == "1"
+    assert "GIT_CONFIG_KEY_1" not in captured["env"]
 
 
 def test_workspace_shell_rejects_composed_git_commands(monkeypatch):

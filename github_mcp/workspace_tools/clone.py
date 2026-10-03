@@ -48,5 +48,5 @@ async def ensure_workspace_clone(
             "reset": reset,
             "created": not existed,
         }
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - tool boundary translates dependency errors
         return _structured_tool_error(exc, context="ensure_workspace_clone")

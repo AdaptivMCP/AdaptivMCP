@@ -8,7 +8,7 @@ def _reload_utils(monkeypatch, raw_value):
     else:
         monkeypatch.setenv("GITHUB_REPO_DEFAULTS", raw_value)
 
-    import github_mcp.utils as utils
+    from github_mcp import utils
 
     return importlib.reload(utils)
 
@@ -52,8 +52,8 @@ def test_repo_defaults_invalid_json_surfaces_warning(monkeypatch):
     assert utils.REPO_DEFAULTS_PARSE_ERROR is not None
     assert "GITHUB_REPO_DEFAULTS" in utils.REPO_DEFAULTS_PARSE_ERROR
 
-    import github_mcp.http_routes.healthz as healthz
-    import github_mcp.main_tools.server_config as server_config
+    from github_mcp.http_routes import healthz
+    from github_mcp.main_tools import server_config
 
     healthz = importlib.reload(healthz)
     server_config = importlib.reload(server_config)

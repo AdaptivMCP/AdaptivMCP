@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 from typing import Any
 
-import github_mcp.server as server
+from github_mcp import server
 from github_mcp.config import (
     FETCH_FILES_CONCURRENCY,
     GIT_AUTHOR_EMAIL,

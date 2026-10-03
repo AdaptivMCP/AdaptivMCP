@@ -53,7 +53,7 @@ def _extract_trailing_int(text: str) -> int | None:
     digits = text[i + 1 :]
     try:
         return int(digits)
-    except Exception:
+    except Exception:  # noqa: BLE001 - handle optional metadata or report a boundary failure
         return None
 
 

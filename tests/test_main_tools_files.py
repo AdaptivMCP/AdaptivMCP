@@ -96,7 +96,7 @@ class FakeMain:
             after_repos = endpoint.split("/repos/", 1)[1]
             full_name, after_full = after_repos.split("/contents/", 1)
             path = after_full.lstrip("/")
-        except Exception:
+        except Exception:  # noqa: BLE001 - handle optional metadata or report a boundary failure
             return {"ok": False, "reason": "unparseable endpoint"}
 
         self.store.pop((full_name, branch, path), None)

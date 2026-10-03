@@ -34,7 +34,11 @@ def _mk_tw(*, clone_repo: Any, run_shell: Any):
             return ref
 
         def _workspace_deps(self) -> dict[str, Any]:
-            return {"clone_repo": clone_repo, "run_git": run_shell, "run_shell": run_shell}
+            return {
+                "clone_repo": clone_repo,
+                "run_git": run_shell,
+                "run_shell": run_shell,
+            }
 
     return _TW()
 

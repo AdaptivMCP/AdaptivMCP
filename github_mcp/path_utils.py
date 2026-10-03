@@ -98,7 +98,7 @@ def base_path_from_path(path: str | None, suffixes: Iterable[str]) -> str:
 
 
 __all__ = [
+    "base_path_from_path",
     "normalize_base_path",
     "request_base_path",
-    "base_path_from_path",
 ]

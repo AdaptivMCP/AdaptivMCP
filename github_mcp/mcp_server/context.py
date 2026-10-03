@@ -9,7 +9,7 @@ from typing import Any
 try:
     # Optional dependency: FastMCP and its transport security helpers.
     from mcp.server.transport_security import TransportSecuritySettings
-except Exception:  # pragma: no cover
+except Exception:  # pragma: no cover  # noqa: BLE001 - handle optional metadata or report a boundary failure
     TransportSecuritySettings = None  # type: ignore[assignment]
 
 
@@ -42,8 +42,12 @@ REQUEST_CAPABILITIES: ContextVar[frozenset[str]] = ContextVar(
 
 # Authenticated transport principal. This is set only by the transport auth
 # middleware and is never derived from client-supplied ChatGPT metadata.
-REQUEST_PRINCIPAL: ContextVar[str | None] = ContextVar("REQUEST_PRINCIPAL", default=None)
-REQUEST_AUTHENTICATED: ContextVar[bool] = ContextVar("REQUEST_AUTHENTICATED", default=False)
+REQUEST_PRINCIPAL: ContextVar[str | None] = ContextVar(
+    "REQUEST_PRINCIPAL", default=None
+)
+REQUEST_AUTHENTICATED: ContextVar[bool] = ContextVar(
+    "REQUEST_AUTHENTICATED", default=False
+)
 
 
 # Legacy flag retained for backward compatibility; write approvals are always enabled.
@@ -72,9 +76,13 @@ def set_request_capabilities(capabilities: Any) -> frozenset[str]:
     if capabilities is None:
         normalized = frozenset()
     elif isinstance(capabilities, str):
-        normalized = frozenset({capabilities.strip()}) if capabilities.strip() else frozenset()
+        normalized = (
+            frozenset({capabilities.strip()}) if capabilities.strip() else frozenset()
+        )
     else:
-        normalized = frozenset(str(cap).strip() for cap in capabilities if str(cap).strip())
+        normalized = frozenset(
+            str(cap).strip() for cap in capabilities if str(cap).strip()
+        )
     REQUEST_CAPABILITIES.set(normalized)
     return normalized
 
@@ -104,24 +112,24 @@ def get_request_id() -> str | None:
 
 # Explicit export list for stable imports in clients and downstream tooling.
 __all__ = [
+    "REQUEST_AUTHENTICATED",
+    "REQUEST_CAPABILITIES",
+    "REQUEST_CHATGPT_METADATA",
     "REQUEST_ID",
+    "REQUEST_IDEMPOTENCY_KEY",
     "REQUEST_MESSAGE_ID",
     "REQUEST_PATH",
+    "REQUEST_PRINCIPAL",
     "REQUEST_RECEIVED_AT",
     "REQUEST_SESSION_ID",
-    "REQUEST_IDEMPOTENCY_KEY",
-    "REQUEST_CHATGPT_METADATA",
-    "REQUEST_CAPABILITIES",
-    "REQUEST_PRINCIPAL",
-    "REQUEST_AUTHENTICATED",
     "REQUEST_WRITE_APPROVED",
-    "get_request_context",
-    "get_request_capabilities",
-    "set_request_capabilities",
-    "has_request_capabilities",
-    "get_request_id",
     "get_auto_approve_enabled",
+    "get_request_capabilities",
+    "get_request_context",
+    "get_request_id",
+    "has_request_capabilities",
     "peek_auto_approve_enabled",
+    "set_request_capabilities",
 ]
 
 
@@ -281,7 +289,7 @@ def peek_auto_approve_enabled() -> bool:
 
 
 def get_write_allowed_debug() -> dict[str, Any]:
-    value, source = _auto_approve_from_env()
+    _value, source = _auto_approve_from_env()
     return {
         "value": True,
         "cache": {
@@ -356,9 +364,9 @@ def _apply_server_identity(server_obj: object | None) -> None:
     if server_obj is None:
         return
     try:
-        setattr(server_obj, "name", SERVER_NAME)
-        setattr(server_obj, "version", SERVER_VERSION)
-    except Exception:
+        server_obj.name = SERVER_NAME
+        server_obj.version = SERVER_VERSION
+    except Exception:  # noqa: BLE001 - handle optional metadata or report a boundary failure
         return
 
 
@@ -374,7 +382,7 @@ try:
     )
 
     _apply_server_identity(getattr(mcp, "_mcp_server", None))
-except Exception as exc:  # pragma: no cover - used when dependency missing
+except Exception as exc:  # pragma: no cover - used when dependency missing  # noqa: BLE001 - handle optional metadata or report a boundary failure
     FASTMCP_AVAILABLE = False
     missing_exc = exc
 

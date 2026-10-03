@@ -77,8 +77,8 @@ def test_sitecustomize_injects_notrequired_and_required(
         typing_extensions_mod=typing_extensions_mod,
     )
 
-    assert getattr(typing_mod, "NotRequired") is not_required_sentinel
-    assert getattr(typing_mod, "Required") is required_sentinel
+    assert typing_mod.NotRequired is not_required_sentinel
+    assert typing_mod.Required is required_sentinel
 
 
 def test_sitecustomize_does_not_override_existing_typing_symbols(

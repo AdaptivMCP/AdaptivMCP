@@ -117,7 +117,7 @@ def test_all_registered_tools_have_docstring_metadata_schema_and_signature() -> 
                 failures.append(
                     f"{name}: wrapper signature collapsed to *args/**kwargs"
                 )
-        except Exception:
+        except Exception:  # noqa: BLE001 - handle optional metadata or report a boundary failure
             failures.append(f"{name}: wrapper signature not inspectable")
 
     assert not failures, "\n".join(["Tool wrapper/metadata failures:"] + failures)

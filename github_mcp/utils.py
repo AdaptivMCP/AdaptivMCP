@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import io
 import json
-import os  # noqa: E402  pylint: disable=wrong-import-position
+import os
 import re
 import subprocess  # nosec B404
 import sys
@@ -60,13 +60,13 @@ def _normalize_timeout_seconds(value: object, default: int) -> int:
                 return int(default)
             try:
                 return int(float(s))
-            except Exception:
+            except Exception:  # noqa: BLE001 - handle optional metadata or report a boundary failure
                 return int(default)
         return int(default)
 
     try:
         coerced = _coerce(value)
-    except Exception:
+    except Exception:  # noqa: BLE001 - handle optional metadata or report a boundary failure
         coerced = int(default)
 
     # 0 (or negative) disables timeouts.
@@ -150,7 +150,7 @@ def _normalize_repo_path(path: str) -> str:
         # Best-effort stringification.
         try:
             path = str(path)
-        except Exception:
+        except Exception:  # noqa: BLE001 - handle optional metadata or report a boundary failure
             path = ""
 
     normalized = path.strip().replace("\\", "/").lstrip("/")
@@ -181,7 +181,7 @@ def _normalize_repo_path_for_repo(full_name: str, path: str) -> str:
     if not isinstance(path, str):
         try:
             path = str(path)
-        except Exception:
+        except Exception:  # noqa: BLE001 - handle optional metadata or report a boundary failure
             path = ""
 
     normalized = path.strip().replace("\\", "/")
@@ -347,7 +347,7 @@ def _render_visible_whitespace(text: str) -> str:
 
     rendered_lines: list[str] = []
     for line in text.splitlines(keepends=True):
-        body = line[:-1] if line.endswith("\n") else line
+        body = line.removesuffix("\n")
         body = body.replace("\t", "→\t").replace(" ", "·")
         newline_marker = "⏎" if line.endswith("\n") else "␄"
         rendered_lines.append(f"{body}{newline_marker}")
@@ -368,7 +368,7 @@ def _decode_zipped_job_logs(zip_bytes: bytes) -> str:
                     content = handle.read().decode("utf-8", errors="replace")
                 parts.append(f"[{name}]\n{content}".rstrip())
             return "\n\n".join(parts)
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - handle optional metadata or report a boundary failure
         exc_name = type(exc).__name__
         exc_message = str(exc).strip()
         if exc_message:
@@ -497,7 +497,7 @@ def _detect_controller_repo(*, fallback: str) -> str:
             stderr=subprocess.DEVNULL,
             text=True,
         ).strip()
-    except Exception:
+    except Exception:  # noqa: BLE001 - handle optional metadata or report a boundary failure
         remote_url = ""
 
     parsed = _parse_github_remote_repo(remote_url)
@@ -533,7 +533,7 @@ def _detect_controller_branch(*, fallback: str) -> str:
         ).strip()
         if branch and branch not in {"HEAD", "(unknown)"}:
             return branch
-    except Exception:  # nosec B110
+    except Exception:  # nosec B110  # noqa: BLE001, S110 - optional cleanup or compatibility fallback
         pass
 
     return fallback
@@ -543,22 +543,22 @@ CONTROLLER_REPO = _detect_controller_repo(fallback="owner/repo")
 CONTROLLER_DEFAULT_BRANCH = _detect_controller_branch(fallback="main")
 
 __all__ = [
-    "_get_main_module",
-    "REPO_DEFAULTS_PARSE_ERROR",
     "REPO_DEFAULTS",
+    "REPO_DEFAULTS_PARSE_ERROR",
     "_decode_zipped_job_logs",
     "_default_branch_for_repo",
     "_effective_ref_for_repo",
-    "_extract_hostname",
     "_env_flag",
-    "_normalize_timeout_seconds",
-    "extract_sha",
+    "_extract_hostname",
+    "_get_main_module",
     "_normalize_branch",
     "_normalize_repo_path",
     "_normalize_repo_path_for_repo",
+    "_normalize_timeout_seconds",
     "_normalize_write_context",
-    "require_text",
     "_render_external_hosts",
     "_render_visible_whitespace",
     "_with_numbered_lines",
+    "extract_sha",
+    "require_text",
 ]
